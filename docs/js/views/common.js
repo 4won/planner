@@ -34,7 +34,8 @@ export function taskRow(it, W, { showProject = true } = {}) {
 
   const main = el('div', 'row-main');
   const title = el('div', 'row-title');
-  title.append(el('span', 'dot c-' + it.color), el('span', 't', it.title));
+  const tt = el('span', 't', it.title); tt.title = it.title;
+  title.append(el('span', 'dot c-' + it.color), tt);
   main.append(title);
   const meta = el('div', 'row-meta');
   if (it.due) meta.append(ddayEl(it.due, it.done), el('span', '', `${md(parse(it.due))} 마감`));
@@ -61,7 +62,7 @@ export function eventRow(e, dayStr) {
   const r = el('button', 'ev-row' + (e.external ? ' ext' : '')); r.type = 'button';
   r.append(el('span', 'ev-time', eventTimeText(e, dayStr)));
   const m = el('span', 'ev-main');
-  const t = el('span', 'ev-title'); t.append(el('span', 'dot c-' + e.color), el('span', null, e.title));
+  const t = el('span', 'ev-title'); t.append(el('span', 'dot c-' + e.color), el('span', null, e.title)); t.title = e.title;
   m.append(t);
   const meta = [e.location, e.projectId ? projectName(e.projectId) : '', e.recur ? recurText(e) : '', e.external ? '외부 캘린더' : ''].filter(Boolean).join(' · ');
   if (meta) m.append(el('span', 'ev-meta', meta));

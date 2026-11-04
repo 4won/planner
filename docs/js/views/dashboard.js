@@ -250,7 +250,7 @@ export function renderDashboard() {
   const soon = tasks.all().filter(x => !x.done && x.due && x.due <= until).sort(byDue).slice(0, 8);
   if (!soon.length) up.append(el('p', 'quiet', '2주 안에 마감되는 업무가 없습니다.'));
   const ul = el('div', 'group');
-  soon.forEach(x => { const r = btn('mini-row', '', () => openTask(x.id)); r.append(ddayEl(x.due, false), el('span', 'mini-title', x.title), el('span', 'mini-time', md(parse(x.due)))); ul.append(r); });
+  soon.forEach(x => { const r = btn('mini-row', '', () => openTask(x.id)); r.title = x.title; r.append(ddayEl(x.due, false), el('span', 'mini-title', x.title), el('span', 'mini-time', md(parse(x.due)))); ul.append(r); });
   up.append(ul);
 
   const td = el('div', 'widget');

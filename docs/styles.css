@@ -718,3 +718,29 @@ button.kpi:hover .kpi-go { color: var(--accent); }
 .prop-field.wide input { width: 100%; }
 @media (max-width: 640px) { .prop-field.wide { grid-column: 1 / -1; } }
 @media (prefers-reduced-motion: reduce) { .col.focus { animation: none; box-shadow: 0 0 0 3px var(--accent); } }
+
+/* ---------- keep wide children inside their column (iPhone) ----------
+   Grid items default to min-width: auto, so one stubborn child (iOS date inputs refuse to
+   shrink) widened the whole memo pane past the screen. Tracks are pinned with minmax(0, 1fr)
+   and children may shrink. */
+.memo-pane, .memo-stream, .recap, .props, .prop-fields, .memo-recaps, .entry-body, .ed, .field, .widget, .group { grid-template-columns: minmax(0, 1fr); }
+.memo-pane > *, .recap > *, .props > *, .prop-fields > *, .prop-line > *, .ed > *, .field > * { min-width: 0; max-width: 100%; }
+.entry { grid-template-columns: 46px minmax(0, 1fr); }
+.entry-text, .recap-summary, .prop-note { overflow-wrap: anywhere; word-break: break-word; }
+input[type=date], input[type=time] { min-width: 0; max-width: 100%; box-sizing: border-box; }
+/* iOS Safari only: its native date/time boxes keep their own width; flatten them. */
+@supports (-webkit-touch-callout: none) {
+  input[type=date], input[type=time] { -webkit-appearance: none; appearance: none; display: block; width: 100%; min-height: 2.3em; text-align: left; }
+  input[type=date]::-webkit-date-and-time-value, input[type=time]::-webkit-date-and-time-value { text-align: left; }
+}
+
+/* ---------- one-line titles in lists: long titles end in "…" (full title on tap / hover) ---------- */
+.row-title span.t, .mini-title, .ev-title > span:last-child, .mtitle-btn, .memo-item .mi-title, .hbar-label > span:last-child {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal;
+}
+.row-title, .ev-title, .ev-main { min-width: 0; }
+.mtitle { flex-wrap: nowrap; overflow: hidden; }
+.mtitle-btn { flex: 0 1 auto; }
+.mtitle > :not(.mtitle-btn) { flex: none; }
+/* board cards keep up to two lines */
+.card-title { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

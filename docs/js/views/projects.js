@@ -168,7 +168,7 @@ function tableRow(t, showProject) {
   r.append(cb);
 
   const title = el('div', 'mtitle');
-  title.append(btn('mtitle-btn', t.title, () => openTask(t.id)));
+  title.append(btn('mtitle-btn', t.title, () => openTask(t.id), t.title));
   if (showProject && t.projectId) title.append(el('span', 'pill proj', projectName(t.projectId)));
   t.tags.forEach(tag => title.append(tagChip(tag)));
   if (t.repeat && !t.done) title.append(el('span', 'pill weekly', '매주'));
