@@ -1,27 +1,32 @@
-// Projects, Monday-style: an overview of project cards, then per project a main table
-// (colored groups, filled status cells, drag to reorder or move between groups), a board,
-// a timeline and a small dashboard.
-import { $, el, btn, option, ddayEl, empty, armedDelete, enableDrag, CHECK_SVG } from '../ui.js';
-import { ymd, parse, addDays, today, weekStart, daysBetween, md } from '../dates.js';
-import { STATUSES, PRIORITIES, normTask, normGroup, nextGroupColor, withStatus, statusLabel, COLORS } from '../model.js';
-import { tasks, projects, groups, activeProjects, projectName } from '../db.js';
+// Projects: an overview of project cards, then per project a dashboard, a board, a main table
+// (sections by status — dragging a row to another section changes its status) and a timeline.
+// Hashtags replace groups: shown on rows and cards, clickable to filter.
+import { $, el, btn, option, ddayEl, empty, enableDrag, CHECK_SVG } from '../ui.js';
+import { ymd, parse, addDays, today, weekStart, daysBetween, md, newId } from '../dates.js';
+import { STATUSES, PRIORITIES, normTask, withStatus, statusLabel } from '../model.js';
+import { tasks, projects, activeProjects, projectName } from '../db.js';
 import { state } from '../store.js';
-import { openTask, openProject, groupsOf } from '../editors.js';
-import { newId } from '../dates.js';
+import { openTask, openProject } from '../editors.js';
 
 const lsGet = (k, f) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; } catch (e) { return f; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
-export const projState = { pid: null, view: lsGet('wcp:pview', 'table'), q: '', hideDone: true, showArchived: false, collapsed: new Set(lsGet('wcp:collapsed', [])) };
+const VIEWS = ['dash', 'board', 'table', 'timeline'];
+export const projState = { pid: null, view: VIEWS.includes(lsGet('wcp:pview2', 'dash')) ? lsGet('wcp:pview2', 'dash') : 'dash', q: '', hideDone: true, showArchived: false, focus: null, collapsed: new Set(lsGet('wcp:collapsed', [])) };
 const rerender = () => window.dispatchEvent(new Event('planner:render'));
 const order = (a, b) => (a.sort || 0) - (b.sort || 0) || ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0);
+const setView = v => { projState.view = v; lsSet('wcp:pview2', v); };
 
 export function openProjectPage(pid) { projState.pid = pid; window.scrollTo(0, 0); }
 
 function matches(t) {
   const q = projState.q.trim().toLowerCase();
-  return !q || (t.title + ' ' + t.memo).toLowerCase().includes(q);
+  if (!q) return true;
+  if (q.startsWith('#')) { const tag = q.slice(1); return t.tags.some(x => x.toLowerCase() === tag); }
+  return (t.title + ' ' + t.memo + ' ' + t.tags.join(' ')).toLowerCase().includes(q);
 }
 const inProject = t => projState.pid === 'all' || t.projectId === projState.pid;
+const filterTag = tag => { projState.q = '#' + tag; $('#projSearch').value = projState.q; if (projState.view === 'dash') setView('table'); rerender(); };
+const tagChip = tag => { const b = btn('tag', '#' + tag, e => { e.stopPropagation(); filterTag(tag); }, `#${tag} 모아보기`); return b; };
 
 export function renderProjects() {
   if (projState.pid && projState.pid !== 'all' && !projects.get(projState.pid)) projState.pid = null;
@@ -38,6 +43,7 @@ export function renderProjects() {
   document.querySelectorAll('[data-pview]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.pview === projState.view)));
   $('#hideDone').checked = projState.hideDone;
   $('#hideDoneWrap').hidden = projState.view === 'board' || projState.view === 'dash';
+  if ($('#projSearch').value !== projState.q && document.activeElement !== $('#projSearch')) $('#projSearch').value = projState.q;
 
   const body = $('#projBody'); body.textContent = '';
   if (!state.loaded) { body.append(el('div', 'empty', '불러오는 중…')); return; }
@@ -45,8 +51,8 @@ export function renderProjects() {
   const list = all.filter(t => matches(t) && (projState.view === 'board' || projState.view === 'dash' || !projState.hideDone || !t.done));
   if (projState.view === 'board') body.append(board(list, p));
   else if (projState.view === 'timeline') body.append(timeline(list, p));
-  else if (projState.view === 'dash') body.append(dashboard(all, p));
-  else body.append(table(list, p));
+  else if (projState.view === 'table') body.append(table(list, p));
+  else body.append(dashboard(all, p));
 }
 
 // ---------- overview ----------
@@ -93,61 +99,39 @@ function renderOverview() {
     const d = el('details', 'archived'); d.append(el('summary', null, `보관한 프로젝트 ${archived.length}개`));
     const g = el('div', 'pcards'); archived.forEach(p => g.append(card(p.id, p.name, p.color, tasks.all().filter(t => t.projectId === p.id)))); d.append(g); box.append(d);
   }
-  if (!activeProjects().length) box.append(empty(null, '프로젝트를 만들면 그룹별로 업무를 정리하고 표·보드·타임라인·대시보드로 볼 수 있습니다.'));
+  if (!activeProjects().length) box.append(empty(null, '프로젝트를 만들면 대시보드·보드·표·타임라인으로 업무를 볼 수 있습니다.'));
 }
 
-// ---------- main table ----------
+// ---------- sections: by status inside a project, by project across all ----------
 function sections(p) {
-  if (p) {
-    const gs = groupsOf(p.id);
-    const ids = new Set(gs.map(g => g.id));
-    const secs = gs.map(g => ({ kind: 'group', key: g.id, title: g.name, color: g.color, group: g, member: t => t.projectId === p.id && t.groupId === g.id }));
-    const looseMember = t => t.projectId === p.id && (!t.groupId || !ids.has(t.groupId));
-    if (!gs.length || tasks.all().some(looseMember)) secs.push({ kind: 'group', key: '', title: '그룹 없음', color: 'slate', member: looseMember });
-    return secs;
-  }
-  const secs = activeProjects().map(pr => ({ kind: 'project', key: pr.id, title: pr.name, color: pr.color, member: t => t.projectId === pr.id }));
-  secs.push({ kind: 'project', key: '', title: '프로젝트 없음', color: 'slate', member: t => !t.projectId || !projects.get(t.projectId) || projects.get(t.projectId).archived });
+  if (p) return STATUSES.map(s => ({ kind: 'status', key: s.key, title: s.label, cls: 'st-' + s.key, member: t => t.projectId === p.id && t.status === s.key }));
+  const secs = activeProjects().map(pr => ({ kind: 'project', key: pr.id, title: pr.name, cls: 'c-' + pr.color, member: t => t.projectId === pr.id }));
+  secs.push({ kind: 'project', key: '', title: '프로젝트 없음', cls: 'c-slate', member: t => !t.projectId || !projects.get(t.projectId) || projects.get(t.projectId).archived });
   return secs;
 }
 
+// ---------- main table ----------
 function table(list, p) {
   const wrap = el('div', 'mtable');
-  const secs = sections(p);
   const visible = new Set(list.map(t => t.id));
-  secs.forEach(s => {
+  sections(p).forEach(s => {
+    if (s.kind === 'status' && s.key === 'done' && projState.hideDone) return;
     const items = tasks.all().filter(t => s.member(t) && visible.has(t.id)).sort(order);
-    if (!p && !items.length && projState.q) return;
-    const ckey = `${projState.pid}:${s.key}`;
+    if ((!p || projState.q) && !items.length) return;
+    const ckey = `${projState.pid}:${s.kind}:${s.key}`;
     const collapsed = projState.collapsed.has(ckey);
-    const sec = el('section', 'mgroup c-' + s.color + (collapsed ? ' collapsed' : ''));
+    const sec = el('section', 'mgroup ' + s.cls + (collapsed ? ' collapsed' : ''));
     sec.dataset.kind = s.kind; sec.dataset.key = s.key;
-
     const h = el('div', 'mg-head');
-    const tog = btn('mg-toggle', collapsed ? '▸' : '▾', () => { collapsed ? projState.collapsed.delete(ckey) : projState.collapsed.add(ckey); lsSet('wcp:collapsed', [...projState.collapsed]); rerender(); }, collapsed ? '펼치기' : '접기');
-    h.append(tog);
-    if (s.group) {
-      const name = el('input', 'mg-name'); name.value = s.group.name; name.maxLength = 60; name.setAttribute('aria-label', '그룹 이름');
-      name.addEventListener('change', () => { const v = name.value.trim(); if (v && v !== s.group.name) groups.put({ ...s.group, name: v }); });
-      name.addEventListener('keydown', e => { if (e.key === 'Enter') name.blur(); });
-      h.append(name);
-    } else h.append(el('span', 'mg-name static', s.title));
-    h.append(el('span', 'mg-count', `${items.length}개`));
-    if (s.group) {
-      h.append(el('span', 'spacer'));
-      h.append(btn('linkbtn', '색', () => groups.put({ ...s.group, color: COLORS[(COLORS.indexOf(s.group.color) + 1) % COLORS.length] }), '그룹 색 바꾸기'));
-      const del = btn('linkbtn danger', '삭제');
-      armedDelete(del, () => { tasks.all().filter(t => t.groupId === s.group.id).forEach(t => tasks.put({ ...t, groupId: null })); groups.remove(s.group.id); }, '삭제');
-      h.append(del);
-    }
+    h.append(btn('mg-toggle', collapsed ? '▸' : '▾', () => { collapsed ? projState.collapsed.delete(ckey) : projState.collapsed.add(ckey); lsSet('wcp:collapsed', [...projState.collapsed]); rerender(); }, collapsed ? '펼치기' : '접기'));
+    h.append(el('span', 'mg-name static', s.title), el('span', 'mg-count', `${items.length}개`));
     sec.append(h);
-
     if (!collapsed) {
       const t = el('div', 'mg-table');
       const head = el('div', 'mrow mhead');
       ['', '', '업무', '상태', '우선순위', '기간', '마감'].forEach(x => head.append(el('span', null, x)));
       t.append(head);
-      items.forEach(it => t.append(tableRow(it, !p, s)));
+      items.forEach(it => t.append(tableRow(it, !p)));
       const add = el('form', 'mrow madd');
       add.append(el('span'), el('span'));
       const inp = el('input'); inp.type = 'text'; inp.placeholder = '+ 업무 추가'; inp.maxLength = 120; inp.setAttribute('aria-label', `${s.title}에 업무 추가`);
@@ -156,27 +140,23 @@ function table(list, p) {
         e.preventDefault();
         const title = inp.value.trim(); if (!title) return;
         const last = tasks.all().filter(s.member).sort(order).pop();
-        const projectId = s.kind === 'project' ? (s.key || null) : p.id;
-        tasks.put(normTask(newId(), { title, projectId, groupId: s.kind === 'group' && s.key ? s.key : null, repeat: false, sort: (last ? last.sort || 0 : 0) + 1000 }));
+        let nt = normTask(newId(), { title, projectId: s.kind === 'project' ? (s.key || null) : p.id, repeat: false, sort: (last ? last.sort || 0 : 0) + 1000 });
+        if (s.kind === 'status') nt = withStatus(nt, s.key);
+        tasks.put(nt);
         inp.value = '';
         setTimeout(() => { const again = document.querySelector(`[aria-label="${s.title}에 업무 추가"]`); if (again) again.focus(); }, 60);
       });
       t.append(add);
-      const sum = el('div', 'mrow msum'); sum.append(el('span'), el('span'), el('span'));
-      sum.append(battery(items)); t.append(sum);
+      if (s.kind === 'project') { const sum = el('div', 'mrow msum'); sum.append(el('span'), el('span'), el('span')); sum.append(battery(items)); t.append(sum); }
       sec.append(t);
     }
     wrap.append(sec);
   });
-  if (p) wrap.append(btn('btn ghost addgroup', '+ 새 그룹 추가', () => {
-    const n = groupsOf(p.id).length;
-    groups.put(normGroup(newId('g'), { projectId: p.id, name: '새 그룹', color: nextGroupColor(n), sort: Date.now() }));
-    setTimeout(() => { const inputs = document.querySelectorAll('.mg-name'); const last = inputs[inputs.length - 1]; if (last && last.focus) { last.focus(); last.select(); } }, 80);
-  }));
+  if (!wrap.children.length) wrap.append(el('p', 'quiet', projState.q ? '검색 결과가 없습니다.' : '업무가 없습니다.'));
   return wrap;
 }
 
-function tableRow(t, showProject, sec) {
+function tableRow(t, showProject) {
   const r = el('div', 'mrow' + (t.done ? ' is-done' : ''));
   r.dataset.id = t.id;
   const grip = el('span', 'grip'); grip.innerHTML = '<svg viewBox="0 0 10 16"><circle cx="3" cy="3" r="1.3"/><circle cx="7" cy="3" r="1.3"/><circle cx="3" cy="8" r="1.3"/><circle cx="7" cy="8" r="1.3"/><circle cx="3" cy="13" r="1.3"/><circle cx="7" cy="13" r="1.3"/></svg>';
@@ -188,8 +168,9 @@ function tableRow(t, showProject, sec) {
   r.append(cb);
 
   const title = el('div', 'mtitle');
-  const tb = btn('mtitle-btn', t.title, () => openTask(t.id)); title.append(tb);
-  if (showProject && t.projectId && sec.kind !== 'project') title.append(el('span', 'pill proj', projectName(t.projectId)));
+  title.append(btn('mtitle-btn', t.title, () => openTask(t.id)));
+  if (showProject && t.projectId) title.append(el('span', 'pill proj', projectName(t.projectId)));
+  t.tags.forEach(tag => title.append(tagChip(tag)));
   if (t.repeat && !t.done) title.append(el('span', 'pill weekly', '매주'));
   if (t.memo) title.append(el('span', 'memo-mark', '메모'));
   r.append(title);
@@ -207,7 +188,8 @@ function tableRow(t, showProject, sec) {
   const per = el('span', 'mperiod');
   if (t.startDate || t.due) {
     const a = t.startDate || t.due, b = t.due || t.startDate;
-    const chip = el('span', 'period-chip c-' + (sec.color || t.color));
+    const proj = t.projectId && projects.get(t.projectId);
+    const chip = el('span', 'period-chip c-' + (proj ? proj.color : t.color));
     chip.textContent = a === b ? md(parse(a)) : `${md(parse(a))} – ${md(parse(b))}`;
     if (t.startDate && t.due) {
       const total = Math.max(1, daysBetween(parse(a), parse(b)) + 1), gone = Math.min(total, Math.max(0, daysBetween(parse(a), today()) + 1));
@@ -229,7 +211,7 @@ function tableRow(t, showProject, sec) {
   return r;
 }
 
-// ---- drag between groups ----
+// ---- drag between sections ----
 function clearMarks() { document.querySelectorAll('.drop-before, .drop-after, .drop-into').forEach(e => e.classList.remove('drop-before', 'drop-after', 'drop-into')); }
 function markDrop(x, y, self) {
   clearMarks();
@@ -255,14 +237,12 @@ function moveTask(id, target) {
   const list = tasks.all().filter(x => sec.member(x) && x.id !== id).sort(order);
   let at = list.length;
   if (target.ref) { const i = list.findIndex(x => x.id === target.ref); if (i >= 0) at = target.after ? i + 1 : i; }
-  const moved = sec.kind === 'group'
-    ? { ...t, projectId: p ? p.id : t.projectId, groupId: sec.key || null }
-    : { ...t, projectId: sec.key || null, groupId: sec.key === t.projectId ? t.groupId : null };
+  const moved = sec.kind === 'status' ? withStatus(t, sec.key) : { ...t, projectId: sec.key || null };
   list.splice(at, 0, moved);
   list.forEach((x, i) => {
     const next = { ...x, sort: (i + 1) * 1000 };
     const cur = tasks.get(x.id);
-    if (!cur || cur.sort !== next.sort || cur.groupId !== next.groupId || cur.projectId !== next.projectId) tasks.put(next);
+    if (!cur || cur.sort !== next.sort || cur.status !== next.status || cur.projectId !== next.projectId) tasks.put(next);
   });
 }
 
@@ -270,29 +250,33 @@ function moveTask(id, target) {
 function board(list, p) {
   const wrap = el('div', 'board');
   STATUSES.forEach(s => {
-    const col = el('div', 'col st-' + s.key); col.dataset.status = s.key;
+    const col = el('div', 'col st-' + s.key + (projState.focus === s.key ? ' focus' : '')); col.dataset.status = s.key;
     const items = list.filter(t => t.status === s.key).sort(order);
     const h = el('div', 'col-head'); h.append(el('span', 'col-title', s.label), el('span', 'count', String(items.length)));
     col.append(h);
     const cards = el('div', 'cards');
-    items.forEach(t => cards.append(card(t, !p, wrap)));
+    items.forEach(t => cards.append(card(t, wrap)));
     col.append(cards);
-    if (s.key !== 'done') col.append(btn('linkbtn', '+ 업무', () => openTask(null, { projectId: p ? p.id : null, status: s.key })));
+    if (s.key !== 'done') col.append(btn('linkbtn', '+ 업무', () => openTask(null, { projectId: p ? p.id : null, status: s.key, repeat: false, lead: 0 })));
     wrap.append(col);
   });
+  if (projState.focus) {
+    const f = projState.focus; projState.focus = null;
+    requestAnimationFrame(() => { const c = wrap.querySelector(`.col[data-status="${f}"]`); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' }); });
+  }
   return wrap;
 }
-function card(t, showProject, boardEl) {
-  const c = el('div', 'card' + (t.done ? ' is-done' : '')); c.tabIndex = 0;
-  const g = t.groupId && groups.get(t.groupId);
-  if (g) c.classList.add('c-' + g.color);
-  const top = el('div', 'card-title'); top.append(el('span', null, t.title)); c.append(top);
+// Card order: project (colored) · title · D-day · date · priority · hashtags.
+function card(t, boardEl) {
+  const proj = t.projectId && projects.get(t.projectId);
+  const c = el('div', 'card' + (t.done ? ' is-done' : '') + (proj ? ' c-' + proj.color : '')); c.tabIndex = 0;
+  if (proj) { const pc = el('span', 'card-proj'); pc.append(el('span', 'dot'), el('span', null, proj.name)); c.append(pc); }
+  c.append(el('div', 'card-title', t.title));
   const meta = el('div', 'row-meta');
-  if (g) meta.append(el('span', 'pill grp', g.name));
   if (t.due) meta.append(ddayEl(t.due, t.done), el('span', null, md(parse(t.due))));
   if (t.priority) meta.append(el('span', 'pill pr-' + t.priority, PRIORITIES[t.priority]));
-  if (showProject && t.projectId) meta.append(el('span', 'pill proj', projectName(t.projectId)));
-  c.append(meta);
+  t.tags.forEach(tag => meta.append(tagChip(tag)));
+  if (meta.children.length) c.append(meta);
   c.addEventListener('click', () => openTask(t.id));
   c.addEventListener('keydown', e => { if (e.key === 'Enter') openTask(t.id); });
   let over = null;
@@ -317,7 +301,6 @@ function timeline(list, p) {
   if (daysBetween(lo, hi) > 270) hi = addDays(lo, 270);
   const n = daysBetween(lo, hi) + 1;
   const scroller = el('div', 'tl'); scroller.style.setProperty('--days', n);
-
   const head = el('div', 'tl-row tl-head'); head.append(el('div', 'tl-label', '업무'));
   const days = el('div', 'tl-track');
   for (let i = 0; i < n; i++) {
@@ -329,20 +312,19 @@ function timeline(list, p) {
   }
   head.append(days); scroller.append(head);
   const todayIdx = daysBetween(lo, t0);
-
-  const secs = sections(p);
-  secs.forEach(s => {
+  sections(p).forEach(s => {
     const items = dated.filter(s.member).sort((a, b) => (a.startDate || a.due) < (b.startDate || b.due) ? -1 : 1);
     if (!items.length) return;
-    const gh = el('div', 'tl-row tl-group c-' + s.color); gh.append(el('div', 'tl-label', s.title), el('div', 'tl-track')); scroller.append(gh);
+    const gh = el('div', 'tl-row tl-group ' + s.cls); gh.append(el('div', 'tl-label', s.title), el('div', 'tl-track')); scroller.append(gh);
     items.forEach(t => {
+      const proj = t.projectId && projects.get(t.projectId);
       const row = el('div', 'tl-row');
       const lab = btn('tl-label', '', () => openTask(t.id)); lab.append(el('span', 't', t.title)); row.append(lab);
       const track = el('div', 'tl-track');
       if (todayIdx >= 0 && todayIdx < n) { const line = el('div', 'tl-now'); line.style.left = `calc(${todayIdx} * var(--dw) + var(--dw) / 2)`; track.append(line); }
       const a = parse(t.startDate || t.due), b = parse(t.due || t.startDate);
       const s0 = Math.max(0, daysBetween(lo, a)), e0 = Math.min(n - 1, daysBetween(lo, b < a ? a : b));
-      const bar = btn('tl-bar c-' + s.color + ' st-' + t.status + (t.startDate && t.due ? '' : ' point'), t.startDate && t.due ? t.title : '', () => openTask(t.id));
+      const bar = btn('tl-bar c-' + (proj ? proj.color : t.color) + ' st-' + t.status + (t.startDate && t.due ? '' : ' point'), t.startDate && t.due ? t.title : '', () => openTask(t.id));
       bar.style.left = `calc(${s0} * var(--dw) + 2px)`; bar.style.width = `calc(${e0 - s0 + 1} * var(--dw) - 4px)`;
       bar.title = `${t.title} · ${t.startDate ? md(parse(t.startDate)) : ''}${t.startDate && t.due ? ' → ' : ''}${t.due ? md(parse(t.due)) + ' 마감' : ''} · ${statusLabel(t.status)}`;
       track.append(bar); row.append(track); scroller.append(row);
@@ -380,8 +362,11 @@ function dashboard(all, p) {
   const wrap = el('div', 'dash');
   const c = statusCounts(all);
   const kpis = el('div', 'kpis');
-  [['전체', all.length, ''], ...STATUSES.filter(s => s.key !== 'todo').map(s => [s.label, c[s.key] || 0, 'st-' + s.key])].forEach(([l, v, cls]) => {
-    const k = el('div', 'kpi ' + cls); k.append(el('span', 'kpi-label', l), el('span', 'kpi-num', String(v))); kpis.append(k);
+  const toBoard = status => { setView('board'); projState.focus = status; rerender(); };
+  [['전체', all.length, '', null], ...STATUSES.filter(s => s.key !== 'todo').map(s => [s.label, c[s.key] || 0, 'st-' + s.key, s.key])].forEach(([l, v, cls, key]) => {
+    const k = btn('kpi ' + cls, '', () => toBoard(key), `${l} 업무를 보드에서 보기`);
+    k.append(el('span', 'kpi-label', l), el('span', 'kpi-num', String(v)), el('span', 'kpi-go', '보드에서 보기 ›'));
+    kpis.append(k);
   });
   wrap.append(kpis);
 
@@ -392,15 +377,26 @@ function dashboard(all, p) {
   STATUSES.forEach(s => { const li = el('li'); li.append(el('i', 'sw st-' + s.key), el('span', null, s.label), el('b', null, String(c[s.key] || 0))); lg.append(li); });
   dd.append(lg); w1.append(dd); row.append(w1);
 
-  const w2 = el('div', 'widget'); w2.append(el('h3', null, p ? '그룹별 진행률' : '프로젝트별 진행률'));
+  const w2 = el('div', 'widget');
   const bars = el('div', 'hbars');
-  sections(p).forEach(s => {
-    const items = all.filter(s.member); if (!items.length) return;
-    const done = items.filter(t => t.done).length;
-    const r = el('div', 'hbar'); r.append(el('span', 'hbar-label', s.title), battery(items), el('span', 'hbar-num', `${done}/${items.length}`));
-    bars.append(r);
-  });
-  if (!bars.children.length) bars.append(el('p', 'quiet', '업무가 없습니다.'));
+  if (p) {
+    w2.append(el('h3', null, '해시태그별 진행률'));
+    const tags = [...new Set(all.flatMap(t => t.tags))].sort((a, b) => all.filter(t => t.tags.includes(b)).length - all.filter(t => t.tags.includes(a)).length).slice(0, 10);
+    tags.forEach(tag => {
+      const items = all.filter(t => t.tags.includes(tag)), done = items.filter(t => t.done).length;
+      const r = btn('hbar', '', () => filterTag(tag)); r.append(el('span', 'hbar-label', '#' + tag), battery(items), el('span', 'hbar-num', `${done}/${items.length}`));
+      bars.append(r);
+    });
+    if (!tags.length) bars.append(el('p', 'quiet', '업무에 #해시태그를 달면 태그별 진행률이 여기에 보입니다.'));
+  } else {
+    w2.append(el('h3', null, '프로젝트별 진행률'));
+    sections(null).forEach(s => {
+      const items = all.filter(s.member); if (!items.length) return;
+      const done = items.filter(t => t.done).length;
+      const r = el('div', 'hbar'); r.append(el('span', 'hbar-label', s.title), battery(items), el('span', 'hbar-num', `${done}/${items.length}`));
+      bars.append(r);
+    });
+  }
   w2.append(bars); row.append(w2);
   wrap.append(row);
 
@@ -434,12 +430,11 @@ function dashboard(all, p) {
 }
 
 export function wireProjects() {
-  document.querySelectorAll('[data-pview]').forEach(b => b.addEventListener('click', () => { projState.view = b.dataset.pview; lsSet('wcp:pview', projState.view); rerender(); }));
+  document.querySelectorAll('[data-pview]').forEach(b => b.addEventListener('click', () => { setView(b.dataset.pview); rerender(); }));
   $('#projSearch').addEventListener('input', e => { projState.q = e.target.value; rerender(); });
   $('#hideDone').addEventListener('change', e => { projState.hideDone = e.target.checked; rerender(); });
   $('#projNewTask').addEventListener('click', () => {
     const p = projState.pid && projState.pid !== 'all' ? projects.get(projState.pid) : null;
-    const g = p ? groupsOf(p.id)[0] : null;
-    openTask(null, { projectId: p ? p.id : null, groupId: g ? g.id : null, repeat: false, lead: 0 });
+    openTask(null, { projectId: p ? p.id : null, repeat: false, lead: 0 });
   });
 }

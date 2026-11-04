@@ -1,11 +1,10 @@
 // The app's tables, registered with the sync engine.
 import { defineCollection } from './store.js';
-import { normTask, normProject, normGroup, normEvent, normMemo, normEntry, normRecap, normExtCal, normExtEvent, normPromo, occurrences } from './model.js';
+import { normTask, normProject, normEvent, normMemo, normEntry, normRecap, normExtCal, normExtEvent, normPromo, occurrences } from './model.js';
 import { ymd, addDays, today } from './dates.js';
 
 export const tasks = defineCollection('tasks', { norm: normTask, rename: { doneAt: 'done_at' }, legacyKey: 'items' });
 export const projects = defineCollection('projects', { norm: normProject });
-export const groups = defineCollection('project_groups', { norm: normGroup });
 export const events = defineCollection('events', { norm: normEvent, rename: { remind: 'remind_minutes' } });
 export const memos = defineCollection('memos', { norm: normMemo, rename: { updatedAt: 'touched_at' } });
 export const entries = defineCollection('memo_entries', { norm: normEntry });

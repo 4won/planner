@@ -39,6 +39,7 @@ export function taskRow(it, W, { showProject = true } = {}) {
   const meta = el('div', 'row-meta');
   if (it.due) meta.append(ddayEl(it.due, it.done), el('span', '', `${md(parse(it.due))} 마감`));
   if (showProject && it.projectId) meta.append(el('span', 'pill proj', projectName(it.projectId)));
+  it.tags.forEach(tag => meta.append(el('span', 'pill tagpill', '#' + tag)));
   if (it.status === 'doing' || it.status === 'stuck') meta.append(el('span', 'pill st-' + it.status, statusLabel(it.status)));
   if (it.repeat && !it.done) meta.append(el('span', 'pill weekly', '매주 확인'));
   if (it.due && it.lead && !it.done) meta.append(el('span', '', leadLabel(it.lead)));

@@ -3,8 +3,9 @@ import { $, el, btn, option, armedDelete, copyText } from '../ui.js';
 import { ymd, today, newId } from '../dates.js';
 import { COLORS, COLOR_NAMES, normExtCal } from '../model.js';
 import { CLOUD, sb, state, config, refresh } from '../store.js';
-import { tasks, projects, groups, events, memos, entries, recaps, extCals, extEvents } from '../db.js';
-import { normTask, normProject, normGroup, normEvent, normMemo, normEntry } from '../model.js';
+import { closeX } from '../editors.js';
+import { tasks, projects, events, memos, entries, recaps, extCals, extEvents } from '../db.js';
+import { normTask, normProject, normEvent, normMemo, normEntry } from '../model.js';
 
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 export const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -109,8 +110,9 @@ export function openSettings() {
   }
 
   const acts = el('div', 'ed-actions'); acts.append(el('span', 'spacer'), btn('btn', '닫기', () => d.close())); wrap.append(acts);
-  d.append(wrap);
+  d.append(closeX(() => d.close()), wrap);
   if (!d.open) d.showModal();
+  d.querySelector('.sheet-x').focus({ preventScroll: true });
 }
 
 // ---------- calendar links ----------
@@ -221,7 +223,7 @@ async function syncNow(calendarId, m) {
 function exportData(m) {
   const data = {
     app: 'weekly-check-planner', version: 2, exported: new Date().toISOString(),
-    items: tasks.all(), projects: projects.all(), groups: groups.all(), events: events.all(), memos: memos.all(), entries: entries.all(), recaps: recaps.all(),
+    items: tasks.all(), projects: projects.all(), events: events.all(), memos: memos.all(), entries: entries.all(), recaps: recaps.all(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -244,7 +246,7 @@ async function importData(file, m) {
       return n;
     };
     const items = Array.isArray(parsed) ? parsed : parsed.items;
-    const n = take(items, tasks, normTask, 't') + take(parsed.projects, projects, normProject, 'p') + take(parsed.groups, groups, normGroup, 'g')
+    const n = take(items, tasks, normTask, 't') + take(parsed.projects, projects, normProject, 'p')
       + take(parsed.events, events, normEvent, 'e') + take(parsed.memos, memos, normMemo, 'n') + take(parsed.entries, entries, normEntry, 'm');
     if (!n) throw new Error('불러올 항목을 찾지 못했습니다');
     say(m, `${n}개 항목을 불러왔습니다.`);

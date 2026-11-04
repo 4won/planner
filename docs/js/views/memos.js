@@ -2,10 +2,10 @@
 // and recaps written by Claude show up as review cards above the notes.
 import { $, el, btn, option, empty, armedDelete, copyText, toast } from '../ui.js';
 import { ymd, parse, md, today, hhmm, newId } from '../dates.js';
-import { normMemo, normEntry, normTask, normEvent } from '../model.js';
+import { normMemo, normEntry, normTask, normEvent, normTags, tagsText } from '../model.js';
 import { memos, entries, recaps, tasks, events, projects, activeProjects } from '../db.js';
 import { state } from '../store.js';
-import { openTask, openEvent, groupPicker, groupsOf } from '../editors.js';
+import { openTask, openEvent } from '../editors.js';
 
 export const memoState = { id: null, pane: false };
 const drafts = new Map(); // `${recapId}:${proposalId}` -> edited fields not yet registered
@@ -124,14 +124,6 @@ function suggestProject(p) {
   const hit = activeProjects().find(x => x.name.toLowerCase() === n) || activeProjects().find(x => x.name.toLowerCase().includes(n) || n.includes(x.name.toLowerCase()));
   return hit ? hit.id : '';
 }
-function suggestGroup(p, projectId) {
-  if (!projectId) return { groupId: '', newGroup: '' };
-  if (p.groupId && groupsOf(projectId).some(g => g.id === p.groupId)) return { groupId: p.groupId, newGroup: '' };
-  const n = (p.groupName || '').trim();
-  if (!n) return { groupId: '', newGroup: '' };
-  const hit = groupsOf(projectId).find(g => g.name === n);
-  return hit ? { groupId: hit.id, newGroup: '' } : { groupId: '__new', newGroup: n };
-}
 
 function recapCard(r, m, expanded) {
   const card = el('details', 'recap'); card.open = expanded || r.proposals.some(p => p.status === 'pending');
@@ -150,7 +142,7 @@ function recapCard(r, m, expanded) {
       let d = drafts.get(key);
       if (!d) {
         const projectId = suggestProject(p);
-        d = { checked: p.status === 'pending', title: p.title, due: p.kind === 'event' ? (p.startDate || p.due || '') : (p.due || ''), endDate: p.endDate || '', startTime: p.startTime || '', endTime: p.endTime || '', projectId, ...suggestGroup(p, projectId) };
+        d = { checked: p.status === 'pending', title: p.title, due: p.kind === 'event' ? (p.startDate || p.due || '') : (p.due || ''), endDate: p.endDate || '', startTime: p.startTime || '', endTime: p.endTime || '', projectId, tags: tagsText(p.tags) };
         drafts.set(key, d);
       }
       const settled = p.status !== 'pending';
@@ -186,11 +178,11 @@ function recapCard(r, m, expanded) {
       activeProjects().forEach(x => ps.append(option(x.id, x.name, x.id === d.projectId)));
       line.append(labeled('프로젝트', ps));
       if (p.kind === 'task') {
-        const gp = groupPicker(d.projectId, d.groupId === '__new' ? '' : d.groupId, { newName: d.groupId === '__new' ? d.newGroup : '', onChange: () => { d.groupId = gp.value; d.newGroup = gp.newName; } });
-        if (settled) gp.el.querySelectorAll('select, input').forEach(x => { x.disabled = true; });
-        ps.addEventListener('change', () => { d.projectId = ps.value; gp.setProject(ps.value || null); });
-        d.picker = gp;
-        line.append(labeled('그룹', gp.el));
+        const tg = el('input'); tg.type = 'text'; tg.value = d.tags; tg.placeholder = '#VMD #촬영'; tg.disabled = settled; tg.setAttribute('aria-label', '해시태그');
+        tg.addEventListener('input', () => { d.tags = tg.value; });
+        ps.addEventListener('change', () => { d.projectId = ps.value; });
+        const tf = labeled('해시태그', tg); tf.classList.add('wide');
+        line.append(tf);
       } else ps.addEventListener('change', () => { d.projectId = ps.value; });
       fields.append(line);
       if (p.kind === 'event') fields.append(el('div', 'prop-hint', '종료일을 비워 두면 시작일 하루 일정으로 등록됩니다.'));
@@ -232,9 +224,7 @@ function register(r, m) {
       return { ...p, status: 'added', createdRef: `event:${ev.id}` };
     }
     // Resolving the picker creates a typed-in new group once; later proposals naming it reuse it.
-    const groupId = d.projectId && d.picker ? d.picker.resolve() : null;
-    d.groupId = groupId || ''; d.newGroup = '';
-    const t = normTask(newId(), { title: d.title.trim(), due: d.due || null, lead: p.lead || 0, repeat: false, memo, projectId: d.projectId || null, groupId, sort: Date.now() + n });
+    const t = normTask(newId(), { title: d.title.trim(), due: d.due || null, lead: p.lead || 0, repeat: false, memo, projectId: d.projectId || null, tags: normTags(d.tags), sort: Date.now() + n });
     tasks.put(t);
     return { ...p, status: 'added', createdRef: `task:${t.id}` };
   });

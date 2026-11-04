@@ -34,13 +34,20 @@ export function normTask(id, d = {}) {
     doneAt: done && okDate(d.doneAt) ? d.doneAt : (done ? ymd(today()) : null),
     created: okDate(d.created) ? d.created : ymd(today()),
     projectId: optId(d.projectId),
-    groupId: optId(d.groupId),
+    tags: normTags(d.tags),
     status: done ? 'done' : (['todo', 'doing', 'stuck'].includes(d.status) ? d.status : 'todo'),
     priority: Math.max(0, Math.min(3, Math.round(Number(d.priority) || 0))),
     startDate: okDate(d.startDate) ? d.startDate : null,
     sort: Number(d.sort) || 0,
   };
 }
+// Hashtags: stored without '#', unique, at most 10 short words.
+export function normTags(v) {
+  const list = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[s,#]+/) : [];
+  return [...new Set(list.map(t => String(t).replace(/^#+/, '').trim().slice(0, 30)).filter(Boolean))].slice(0, 10);
+}
+export const tagsText = tags => (tags || []).map(t => '#' + t).join(' ');
+
 export const normProject = (id, d = {}) => ({ id, name: str(d.name || '새 프로젝트', 80), color: color(d.color), archived: !!d.archived, sort: Number(d.sort) || 0 });
 export const normGroup = (id, d = {}) => ({ id, projectId: optId(d.projectId), name: str(d.name || '새 그룹', 60), color: color(d.color), sort: Number(d.sort) || 0 });
 // Next color for a new group in a project, so neighbouring groups differ.
@@ -149,8 +156,7 @@ export function normRecap(id, d = {}) {
     lead: Math.max(0, Math.min(365, Math.round(Number(p.lead) || 0))),
     startDate: okDate(p.startDate || p.start_date) ? (p.startDate || p.start_date) : null,
     endDate: okDate(p.endDate || p.end_date) ? (p.endDate || p.end_date) : null,
-    groupId: optId(p.groupId || p.group_id),
-    groupName: str(p.groupName || p.group_name, 60),
+    tags: normTags(p.tags || p.groupName || p.group_name),
     startTime: timeOf(p.startTime || p.start_time),
     endTime: timeOf(p.endTime || p.end_time),
     location: str(p.location, 200),

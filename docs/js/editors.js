@@ -2,13 +2,20 @@
 // All of them render into the single <dialog id="sheet">.
 import { $, el, btn, option, armedDelete, ddayEl } from './ui.js';
 import { ymd, today, parse, addDays, weekStart, mdLong, newId, leadLabel, okDate, remindLabel } from './dates.js';
-import { COLORS, COLOR_NAMES, STATUSES, PRIORITIES, REMIND_OPTIONS, normTask, normEvent, normProject, normGroup, nextGroupColor, withStatus, eventsOn, eventTimeText, normRecur, recurText, channelLabel } from './model.js';
-import { tasks, events, projects, groups, activeProjects, allEvents, promosIn, projectName } from './db.js';
+import { COLORS, COLOR_NAMES, STATUSES, PRIORITIES, REMIND_OPTIONS, normTask, normEvent, normProject, normTags, tagsText, withStatus, eventsOn, eventTimeText, normRecur, recurText, channelLabel } from './model.js';
+import { tasks, events, projects, activeProjects, allEvents, promosIn, projectName } from './db.js';
 
 const sheet = () => $('#sheet');
 let nav = () => {};
 export const setNavigator = fn => { nav = fn; };
 
+// The X button takes the initial focus, so no text box is focused and no keyboard pops up.
+export function closeX(onClose = close) {
+  const x = btn('sheet-x', '', onClose, '닫기');
+  x.setAttribute('aria-label', '닫기'); x.autofocus = true;
+  x.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  return x;
+}
 function open(title, build) {
   const d = sheet();
   d.textContent = '';
@@ -16,10 +23,9 @@ function open(title, build) {
   form.noValidate = true;
   form.append(el('h2', null, title));
   build(form);
-  d.append(form);
+  d.append(closeX(), form);
   if (!d.open) d.showModal();
-  const first = form.querySelector('input[type=text]');
-  if (first && !('ontouchstart' in window)) first.focus();
+  d.querySelector('.sheet-x').focus({ preventScroll: true });
   return form;
 }
 export const close = () => { if (sheet().open) sheet().close(); };
@@ -60,46 +66,10 @@ function actions(form, { onDelete, extra = [], saveLabel = '저장' }) {
   form.append(a);
 }
 export const projectOptions = () => [['', '프로젝트 없음'], ...activeProjects().map(p => [p.id, p.name])];
-export const groupsOf = pid => groups.all().filter(g => g.projectId === pid).sort((a, b) => a.sort - b.sort);
-
-/**
- * Group dropdown with a "+ 새 그룹…" choice that reveals a name box in place.
- * resolve() returns the chosen group id, creating the new group first when needed.
- */
-export function groupPicker(projectId, groupId, { newName = '', onChange } = {}) {
-  const wrap = el('div', 'gpick');
-  const sel = el('select'); sel.setAttribute('aria-label', '그룹');
-  const name = el('input'); name.type = 'text'; name.placeholder = '새 그룹 이름'; name.maxLength = 60; name.setAttribute('aria-label', '새 그룹 이름');
-  let pid = projectId || null;
-  const fill = keep => {
-    sel.textContent = '';
-    sel.append(option('', pid ? '그룹 없음' : '프로젝트를 먼저 고르세요'));
-    if (pid) { groupsOf(pid).forEach(g => sel.append(option(g.id, g.name))); sel.append(option('__new', '+ 새 그룹…')); }
-    sel.disabled = !pid;
-    sel.value = [...sel.options].some(o => o.value === keep) ? keep : '';
-    name.hidden = sel.value !== '__new';
-  };
-  sel.addEventListener('change', () => { name.hidden = sel.value !== '__new'; if (!name.hidden) name.focus(); if (onChange) onChange(); });
-  name.addEventListener('input', () => { if (onChange) onChange(); });
-  name.value = newName;
-  fill(groupId || (newName ? '__new' : ''));
-  wrap.append(sel, name);
-  return {
-    el: wrap,
-    get value() { return sel.value; },
-    get newName() { return name.value; },
-    setProject(p) { pid = p || null; fill(''); if (onChange) onChange(); },
-    resolve() {
-      if (sel.value !== '__new') return sel.value || null;
-      const n = name.value.trim();
-      if (!n || !pid) return null;
-      const existing = groupsOf(pid).find(g => g.name === n);
-      if (existing) return existing.id;
-      const g = normGroup(newId('g'), { projectId: pid, name: n, color: nextGroupColor(groupsOf(pid).length), sort: Date.now() });
-      groups.put(g);
-      return g.id;
-    },
-  };
+// Hashtag box: "#VMD #촬영" (spaces or commas also work).
+export function tagInput(tags, id = 't-tags') {
+  const i = input(id, 'text', tagsText(tags), { maxlength: 200, placeholder: '#VMD #촬영', autocomplete: 'off', autocapitalize: 'off' });
+  return { el: i, get value() { return normTags(i.value); } };
 }
 
 // ---------- task ----------
@@ -110,10 +80,8 @@ export function openTask(id, preset = {}, onSaved) {
     form.append(field('제목', input('t-title', 'text', base.title === '(제목 없음)' ? '' : base.title, { maxlength: 120, placeholder: '예: 겨울 시즌 매장 VMD 교체' }), 't-title'));
 
     const pSel = select('t-project', projectOptions(), base.projectId || '');
-    const gp = groupPicker(base.projectId, base.groupId);
-    pSel.addEventListener('change', () => gp.setProject(pSel.value || null));
-    const gf = el('div', 'field'); gf.append(el('span', 'lbl', '그룹'), gp.el);
-    const row1 = el('div', 'two'); row1.append(field('프로젝트', pSel, 't-project'), gf);
+    const tagBox = tagInput(base.tags);
+    const row1 = el('div', 'two'); row1.append(field('프로젝트', pSel, 't-project'), field('해시태그', tagBox.el, 't-tags'));
     form.append(row1);
 
     const row2 = el('div', 'two');
@@ -169,7 +137,7 @@ export function openTask(id, preset = {}, onSaved) {
         color: pickedColor(form, 't-color') || base.color,
         memo: memo.value,
         projectId: pSel.value || null,
-        groupId: pSel.value ? gp.resolve() : null,
+        tags: tagBox.value,
         priority: Number(form.querySelector('#t-priority').value),
         startDate: form.querySelector('#t-start').value || null,
         sort: base.sort || Date.now(),
@@ -342,15 +310,13 @@ export function openProject(id, onSaved) {
   open(p ? '프로젝트 편집' : '새 프로젝트', form => {
     form.append(field('이름', input('p-name', 'text', p ? p.name : '', { maxlength: 80, placeholder: '예: 26 FW 시즌 런칭' }), 'p-name'));
     const sw = el('div', 'field'); sw.append(el('span', 'lbl', '색상'), swatches('p-color', base.color)); form.append(sw);
-    if (!p) form.append(el('p', 'set-msg', '‘이번 달’, ‘다음 달’ 두 그룹이 기본으로 만들어집니다. 이름을 바꾸거나 그룹을 더 만들 수 있어요.'));
     const extra = [];
     if (p) extra.push(btn('btn ghost', p.archived ? '보관 해제' : '보관', () => { projects.put({ ...p, archived: !p.archived }); close(); if (onSaved) onSaved(null); }));
     actions(form, {
       onDelete: p ? () => {
         // Tasks, events and memos stay; they just lose the project link.
-        tasks.all().filter(t => t.projectId === p.id).forEach(t => tasks.put({ ...t, projectId: null, groupId: null }));
+        tasks.all().filter(t => t.projectId === p.id).forEach(t => tasks.put({ ...t, projectId: null }));
         events.all().filter(e => e.projectId === p.id).forEach(e => events.put({ ...e, projectId: null }));
-        groups.all().filter(g => g.projectId === p.id).forEach(g => groups.remove(g.id));
         projects.remove(p.id); close(); if (onSaved) onSaved(null);
       } : null,
       extra,
@@ -361,7 +327,6 @@ export function openProject(id, onSaved) {
       if (!name) { form.querySelector('#p-name').focus(); return; }
       const next = normProject(base.id, { ...base, name, color: pickedColor(form, 'p-color') || base.color });
       projects.put(next);
-      if (!p) ['이번 달', '다음 달'].forEach((n, i) => groups.put(normGroup(newId('g'), { projectId: next.id, name: n, color: nextGroupColor(i), sort: i + 1 })));
       close(); if (onSaved) onSaved(next);
     });
   });

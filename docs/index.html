@@ -84,7 +84,7 @@
       <div class="page-head hello">
         <div><h1 id="dashHello">안녕하세요</h1><p id="dashDate"></p></div>
       </div>
-      <div id="dashBody" class="dash home-dash"></div>
+      <div id="dashBody" class="home-grid"></div>
     </section>
 
     <section id="view-week" class="view" hidden>
@@ -127,14 +127,14 @@
       <div id="projPage" hidden>
         <div class="ppage-head" id="projHead"></div>
         <div class="vtabs" role="tablist" aria-label="보기 방식">
-          <button type="button" data-pview="table" aria-selected="true">메인 테이블</button>
+          <button type="button" data-pview="dash" aria-selected="true">대시보드</button>
           <button type="button" data-pview="board" aria-selected="false">보드</button>
+          <button type="button" data-pview="table" aria-selected="false">메인 테이블</button>
           <button type="button" data-pview="timeline" aria-selected="false">타임라인</button>
-          <button type="button" data-pview="dash" aria-selected="false">대시보드</button>
         </div>
         <div class="ptoolbar">
           <button class="btn primary" id="projNewTask" type="button">+ 새 업무</button>
-          <input type="search" id="projSearch" placeholder="업무 검색" aria-label="업무 검색">
+          <input type="search" id="projSearch" placeholder="업무 검색 · #해시태그" aria-label="업무 검색">
           <label class="inline-check" for="hideDone" id="hideDoneWrap"><input type="checkbox" id="hideDone" checked><span>완료 숨기기</span></label>
         </div>
         <div id="projBody" class="proj-body"></div>
