@@ -1,0 +1,94 @@
+# 주간 체크 플래너 — 설치·배포 가이드
+
+웹 주소 하나로 PC·휴대폰 어디서든 쓰고, 앱처럼 설치할 수 있는 PWA입니다.
+
+| 구성 | 역할 | 비용 |
+|---|---|---|
+| GitHub Pages | 앱 화면(`docs/`)을 웹 주소로 공개 | 무료 |
+| Supabase | 로그인, 할 일 저장·동기화, 월요일 알림 발송 | 무료 요금제 |
+
+> 공개되는 것은 앱 코드뿐입니다. 할 일 데이터는 Supabase에 저장되고, 로그인한 본인만 읽을 수 있습니다(행 단위 보안 규칙).
+
+---
+
+## 1. Supabase 프로젝트 만들기 (직접, 약 5분)
+
+1. https://supabase.com 에 가입하고 **New project**를 누릅니다.
+   - Name: `planner`
+   - Database Password: 아무 강한 비밀번호 (따로 보관. 이 앱에서는 쓰지 않음)
+   - Region: **Northeast Asia (Seoul)**
+2. 프로젝트가 만들어지면 **Project Settings → API**(또는 **Data API**)에서 아래 두 값을 복사해 Claude에게 알려 주세요.
+   - **Project URL** (`https://xxxx.supabase.co`)
+   - **anon public** 키 (공개용 키라 알려 줘도 괜찮습니다. `service_role` 키는 절대 공유하지 마세요)
+3. **SQL Editor → New query**에 [`supabase/sql/01_schema.sql`](supabase/sql/01_schema.sql) 내용을 붙여 넣고 **Run**을 누릅니다.
+
+## 2. Claude가 하는 일
+
+Project URL을 받으면 Claude가 아래를 진행합니다.
+
+- `docs/config.js`에 URL과 anon 키를 넣습니다.
+- 월요일 예약 SQL을 만듭니다: `node tools/fill-cron-sql.js <Project URL>` → `supabase/sql/02_monday_cron.local.sql`
+  - 이 파일 내용도 **SQL Editor**에 붙여 넣고 **Run** 해 주세요. 매주 월요일 08:30(한국 시간)에 알림 함수가 실행되도록 예약합니다.
+- 알림 함수(`weekly-digest`)를 배포하고 비밀값을 등록합니다. 이를 위해 터미널에서 **한 번만** 아래 명령을 실행해 Supabase에 로그인해 주세요(브라우저가 열립니다).
+
+```bash
+npx -y supabase login
+```
+
+- GitHub 저장소를 만들어 올리고 GitHub Pages를 켭니다. 앱 주소는 `https://<GitHub 아이디>.github.io/planner/` 입니다.
+
+## 3. 로그인 설정 (직접, 2분)
+
+Supabase 대시보드 **Authentication → URL Configuration**에서
+
+- **Site URL**을 앱 주소(`https://<GitHub 아이디>.github.io/planner/`)로 바꿉니다. 가입 확인 메일의 링크가 이 주소로 돌아옵니다.
+
+## 4. 내 계정 만들기
+
+1. 앱 주소를 열고 이메일·비밀번호(8자 이상)를 입력한 뒤 **처음이에요 · 가입**을 누릅니다.
+2. 받은 확인 메일의 링크를 누르고, 앱으로 돌아와 **로그인**합니다.
+3. 혼자 쓸 앱이므로 다른 사람이 가입하지 못하게 막습니다:
+   **Authentication → Sign In / Providers**(또는 **Settings**)에서 **Allow new users to sign up**을 끕니다.
+
+비밀번호를 잊으면 **Authentication → Users**에서 해당 사용자의 비밀번호 재설정 메일을 보낼 수 있습니다.
+
+## 5. 기기마다 설치하기
+
+| 기기 | 방법 |
+|---|---|
+| Windows / Mac (Chrome·Edge) | 앱 주소 → 주소창 오른쪽 **설치** 아이콘 → 설치. 시작 메뉴·작업표시줄에 고정 가능 |
+| Android (Chrome) | 앱 주소 → 메뉴 ⋮ → **앱 설치** 또는 **홈 화면에 추가** |
+| iPhone / iPad (Safari) | 앱 주소 → 공유 버튼 → **홈 화면에 추가** → 홈 화면 아이콘으로 실행 |
+
+설치 후 각 기기에서 한 번씩 로그인하면 됩니다.
+
+## 6. 월요일 알림 켜기 (기기마다)
+
+앱 오른쪽 위 **⚙ 설정 → 월요일 알림 → 이 기기에서 알림 켜기** → 알림 허용.
+**지금 테스트 알림 받기**로 바로 확인할 수 있습니다.
+
+- iPhone은 iOS 16.4 이상에서, **홈 화면에 추가한 앱**으로 열었을 때만 알림을 켤 수 있습니다.
+- 이번 주 챙길 일이 하나도 없는 주에는 알림을 보내지 않습니다.
+
+---
+
+## 파일 구성
+
+```
+docs/                     GitHub Pages로 공개되는 앱
+  index.html, styles.css, app.js
+  config.js               Supabase 주소·공개 키 (비어 있으면 이 기기에만 저장)
+  sw.js                   오프라인 캐시, 푸시 알림 표시
+  manifest.webmanifest    설치형 앱 정보
+  icons/                  앱 아이콘 (tools/make-icons.js로 생성)
+supabase/
+  sql/01_schema.sql       테이블·보안 규칙
+  sql/02_monday_cron.template.sql  월요일 예약 (값 채우기 전 원본)
+  functions/weekly-digest/ 주간 요약 푸시 발송 함수
+tools/                    아이콘·SQL 생성 스크립트
+.vapid.local.json, .cron-secret.local.txt  푸시·예약용 비밀값 (git에 올리지 않음)
+```
+
+## 앱을 고친 뒤 배포할 때
+
+`docs/sw.js`의 `CACHE` 이름(`wcp-v1` → `wcp-v2`)을 올리고 GitHub에 푸시합니다. 앱은 다음에 열 때 새 버전을 받습니다.
