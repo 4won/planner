@@ -72,11 +72,32 @@ Supabase 대시보드 **Authentication → URL Configuration**에서
 
 ---
 
+## 7. 구글·애플 캘린더 연결 (선택)
+
+앱 ⚙ 설정 → **구글 · 애플 캘린더**에서 두 방향을 각각 켭니다.
+
+- **앱 일정 → 내 캘린더**
+  - **구독 주소 만들기**를 누르고 주소를 복사합니다.
+  - 구글: PC에서 calendar.google.com → 왼쪽 ‘다른 캘린더’ 옆 + → **URL로 추가**에 붙여 넣습니다.
+  - 아이폰: **아이폰·맥에서 바로 구독** 버튼을 누릅니다.
+  - 구글은 몇 시간 간격으로 새로 읽어서 반영이 늦을 수 있습니다.
+- **내 캘린더 → 앱**
+  - 구글은 캘린더 설정 → ‘캘린더 통합’의 **iCal 형식의 비공개 주소**를 복사합니다.
+  - 애플은 캘린더 공유의 **공개 캘린더** 링크를 복사합니다.
+  - 복사한 주소를 앱 설정에 붙여 넣습니다. 15분마다 가져오며, 가져온 일정은 읽기 전용입니다.
+
+## 8. 메모 리캡
+
+회의 메모방에 적은 뒤, Claude 데스크톱에서 “○○ 메모 리캡해줘”라고 말합니다.
+Claude가 [RECAP.md](RECAP.md) 절차대로 요약과 등록 제안을 만들고, 앱의 메모 위에 리캡 카드로 띄웁니다.
+카드에서 제목·날짜·프로젝트를 고치고 **선택 항목 등록**을 누르면 업무·일정이 만들어집니다.
+
 ## 파일 구성
 
 ```
 docs/                     GitHub Pages로 공개되는 앱
-  index.html, styles.css, app.js
+  index.html, styles.css
+  js/                     화면별 모듈 (store.js = 오프라인 대기열·실시간 동기화 엔진)
   config.js               Supabase 주소·공개 키 (비어 있으면 이 기기에만 저장)
   sw.js                   오프라인 캐시, 푸시 알림 표시
   manifest.webmanifest    설치형 앱 정보
@@ -84,11 +105,17 @@ docs/                     GitHub Pages로 공개되는 앱
 supabase/
   sql/01_schema.sql       테이블·보안 규칙
   sql/02_monday_cron.template.sql  월요일 예약 (값 채우기 전 원본)
-  functions/weekly-digest/ 주간 요약 푸시 발송 함수
+  sql/03_projects_events_memos.sql  프로젝트·일정·메모·리캡·캘린더 표
+  sql/04_more_cron.template.sql     일정 알림(매분)·캘린더 가져오기(15분) 예약
+  functions/weekly-digest/  월요일 주간 요약 푸시
+  functions/event-reminders/ 일정 시작 전 알림 푸시
+  functions/calendar-feed/   구글·애플 구독용 ICS 주소
+  functions/calendar-sync/   구글·애플 iCal 가져오기
+RECAP.md                  Claude가 메모를 리캡하는 절차
 tools/                    아이콘·SQL 생성 스크립트
 .vapid.local.json, .cron-secret.local.txt  푸시·예약용 비밀값 (git에 올리지 않음)
 ```
 
 ## 앱을 고친 뒤 배포할 때
 
-`docs/sw.js`의 `CACHE` 이름(`wcp-v1` → `wcp-v2`)을 올리고 GitHub에 푸시합니다. 앱은 다음에 열 때 새 버전을 받습니다.
+`docs/sw.js`의 `CACHE` 이름(예: `wcp-v2` → `wcp-v3`)을 올리고, 새 파일이 생겼으면 `SHELL` 목록에도 넣은 뒤 GitHub에 푸시합니다. 앱은 다음에 열 때 새 버전을 받습니다.

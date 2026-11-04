@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>주간 체크 플래너</title>
-<meta name="description" content="마감일과 리마인드 시작 시점을 정하면 완료할 때까지 매주 체크리스트에 다시 올라오는 투두·캘린더 플래너">
+<meta name="description" content="업무·프로젝트·일정·회의 메모를 한곳에서. 마감 전부터 매주 체크리스트에 올라오는 플래너">
 <meta name="theme-color" content="#f2f4f6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#10151a" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
@@ -24,7 +24,7 @@
 <section class="auth" id="auth" hidden>
   <form class="auth-card" id="authForm" novalidate>
     <h1><span class="hl">주간 체크</span> 플래너</h1>
-    <p>로그인하면 PC와 휴대폰에서 같은 체크리스트를 봅니다.</p>
+    <p>로그인하면 PC와 휴대폰에서 같은 업무·일정·메모를 봅니다.</p>
     <div class="field">
       <label for="a-email">이메일</label>
       <input type="email" id="a-email" autocomplete="username" required>
@@ -47,20 +47,21 @@
       <h1>주간 체크 플래너</h1>
       <p><span class="sync-dot" id="syncDot"></span><span id="syncNote">불러오는 중…</span></p>
     </div>
-    <button class="btn primary" id="addBtn" type="button">+ 새 할 일</button>
+    <nav class="tabs nav" role="tablist" aria-label="화면 전환">
+      <button type="button" role="tab" data-view="home" aria-selected="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 17l2 2 4-4"/></svg><span>이번 주</span></button>
+      <button type="button" role="tab" data-view="calendar" aria-selected="false"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>캘린더</span></button>
+      <button type="button" role="tab" data-view="projects" aria-selected="false"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="16.5" y="4" width="4" height="13" rx="1.5"/></svg><span>프로젝트</span></button>
+      <button type="button" role="tab" data-view="memos" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg><span>메모</span></button>
+    </nav>
+    <button class="btn primary" id="addBtn" type="button">+ 추가</button>
     <button class="iconbtn" id="setBtn" type="button" aria-label="설정">
       <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
-    <nav class="tabs" role="tablist" aria-label="보기 전환">
-      <button type="button" role="tab" data-view="week" aria-selected="true">이번 주</button>
-      <button type="button" role="tab" data-view="calendar" aria-selected="false">캘린더</button>
-      <button type="button" role="tab" data-view="all" aria-selected="false">전체</button>
-    </nav>
   </header>
 
   <div id="banner" class="banner" hidden></div>
 
-  <section id="view-week" class="view">
+  <section id="view-home" class="view">
     <div class="periodbar">
       <button class="navbtn" id="wkPrev" type="button" aria-label="이전 주">‹</button>
       <button class="navbtn" id="wkNext" type="button" aria-label="다음 주">›</button>
@@ -70,7 +71,7 @@
       </div>
       <button class="btn ghost" id="wkToday" type="button">이번 주로</button>
     </div>
-    <div id="weekBody" style="margin-top:14px"></div>
+    <div id="homeBody" class="home-body"></div>
   </section>
 
   <section id="view-calendar" class="view" hidden>
@@ -80,122 +81,66 @@
       <div class="period"><div class="period-label" id="mLabel"></div><div class="period-meta" id="mMeta"></div></div>
       <button class="btn ghost" id="mToday" type="button">이번 달로</button>
     </div>
-    <div class="cal-wrap" style="margin-top:14px"><div class="cal" id="cal"></div></div>
-    <div class="legend" style="margin-top:8px">
-      <span><i></i>날짜 아래 얇은 선: 미리 챙기는 기간(리마인드 시작 ~ 마감)</span>
-      <span>날짜를 누르면 그날 마감으로 새 할 일을 추가합니다</span>
+    <div class="cal-wrap"><div class="cal" id="cal"></div></div>
+    <div class="legend">
+      <span><i class="lg-ev"></i>일정</span>
+      <span><i class="lg-task"></i>업무 마감</span>
+      <span><i class="lg-ext"></i>구글·애플 일정</span>
+      <span><i class="lg-band"></i>미리 챙기는 기간</span>
     </div>
-    <div class="agenda" id="agenda" style="margin-top:14px"></div>
+    <div class="agenda" id="agenda"></div>
   </section>
 
-  <section id="view-all" class="view" hidden>
-    <div class="toolbar">
-      <input type="search" id="q" placeholder="제목·메모 검색" aria-label="검색">
-      <div class="tabs" role="tablist" aria-label="상태 필터">
-        <button type="button" data-filter="open" aria-selected="true">진행 중</button>
-        <button type="button" data-filter="done" aria-selected="false">완료</button>
+  <section id="view-projects" class="view" hidden>
+    <div class="chips-row" id="projChips"></div>
+    <div class="proj-bar">
+      <div id="projHead" class="proj-head"></div>
+      <div class="tabs small" role="tablist" aria-label="보기 방식">
+        <button type="button" data-pview="table" aria-selected="true">표</button>
+        <button type="button" data-pview="board" aria-selected="false">보드</button>
+        <button type="button" data-pview="timeline" aria-selected="false">타임라인</button>
       </div>
     </div>
-    <div id="allBody" style="margin-top:14px"></div>
+    <div class="toolbar">
+      <input type="search" id="projSearch" placeholder="업무 검색" aria-label="업무 검색">
+      <label class="inline-check" for="hideDone"><input type="checkbox" id="hideDone" checked><span>완료 숨기기</span></label>
+    </div>
+    <div id="projBody" class="proj-body"></div>
+  </section>
+
+  <section id="view-memos" class="view" hidden>
+    <div class="memo-layout" id="memoLayout">
+      <aside class="memo-side">
+        <button class="btn primary" id="memoNew" type="button">+ 새 메모</button>
+        <div id="memoItems" class="memo-items"></div>
+      </aside>
+      <section class="memo-pane" id="memoPane" hidden>
+        <div class="memo-head">
+          <button class="navbtn back" id="memoBack" type="button" aria-label="메모 목록으로">‹</button>
+          <input type="text" id="memoTitle" class="memo-title" maxlength="80" aria-label="메모 제목">
+          <select id="memoProject" aria-label="연결 프로젝트"></select>
+          <button class="linkbtn danger" id="memoDelete" type="button">메모 삭제</button>
+        </div>
+        <div id="memoRecaps" class="memo-recaps"></div>
+        <div id="memoStream" class="memo-stream" aria-live="polite"></div>
+        <div class="composer">
+          <textarea id="memoInput" rows="1" placeholder="회의 내용을 적고 엔터 (줄바꿈은 Shift+엔터)" aria-label="메모 입력"></textarea>
+          <button class="btn primary" id="memoSend" type="button">보내기</button>
+        </div>
+        <div class="recap-hint" id="recapHint"></div>
+      </section>
+      <div class="memo-empty" id="memoEmpty">
+        <div class="empty"><strong>회의하면서 바로 적어 두세요</strong><p>메모방을 하나 만들고 엔터만 치면 한 줄씩 쌓입니다. 각 줄은 업무나 일정으로 바로 보낼 수 있고, Claude에게 리캡을 부탁하면 정리와 등록 제안이 여기 붙습니다.</p></div>
+      </div>
+    </div>
   </section>
 </div>
 
-<dialog id="editor" aria-labelledby="edTitle">
-  <form class="ed" id="edForm">
-    <h2 id="edTitle">새 할 일</h2>
-    <div class="field">
-      <label for="f-title">제목</label>
-      <input type="text" id="f-title" required maxlength="120" placeholder="예: 겨울 시즌 매장 VMD 교체">
-    </div>
-    <div class="two">
-      <div class="field">
-        <label for="f-due">마감일</label>
-        <input type="date" id="f-due">
-      </div>
-      <div class="field">
-        <label for="f-lead">언제부터 챙길까요</label>
-        <div class="leadrow">
-          <select id="f-lead">
-            <option value="0">마감 주에만</option>
-            <option value="7">1주 전부터</option>
-            <option value="14">2주 전부터</option>
-            <option value="30" selected>한 달 전부터</option>
-            <option value="60">두 달 전부터</option>
-            <option value="90">석 달 전부터</option>
-            <option value="custom">직접 입력</option>
-          </select>
-          <input type="number" id="f-leadCustom" min="1" max="365" value="45" aria-label="며칠 전부터" hidden>
-        </div>
-      </div>
-    </div>
-    <label class="toggle" for="f-repeat">
-      <input type="checkbox" id="f-repeat" checked>
-      <span><b>완료할 때까지 매주 다시 확인</b><small>이번 주에 체크해도 다음 주 체크리스트에 다시 나옵니다. ‘완료’를 눌러야 끝납니다.</small></span>
-    </label>
-    <div class="field">
-      <span class="lbl">색상</span>
-      <div class="swatches" id="f-color">
-        <label class="c-teal" title="청록"><input type="radio" name="color" value="teal" checked></label>
-        <label class="c-amber" title="호박"><input type="radio" name="color" value="amber"></label>
-        <label class="c-rose" title="장미"><input type="radio" name="color" value="rose"></label>
-        <label class="c-violet" title="보라"><input type="radio" name="color" value="violet"></label>
-        <label class="c-slate" title="회청"><input type="radio" name="color" value="slate"></label>
-      </div>
-    </div>
-    <div class="field">
-      <label for="f-memo">메모</label>
-      <textarea id="f-memo" maxlength="2000" placeholder="체크할 내용, 담당자, 링크 등"></textarea>
-    </div>
-    <div class="hint" id="f-hint"></div>
-    <div class="ed-actions">
-      <button type="button" class="btn danger" id="edDelete" hidden>삭제</button>
-      <button type="button" class="btn ghost" id="edToggleDone" hidden>완료 처리</button>
-      <span class="spacer"></span>
-      <button type="button" class="btn" id="edCancel">취소</button>
-      <button type="submit" class="btn primary">저장</button>
-    </div>
-  </form>
-</dialog>
-
-<dialog id="settings" aria-labelledby="setTitle">
-  <div class="ed">
-    <h2 id="setTitle">설정</h2>
-    <div class="set-sec" id="secAccount">
-      <h3>계정</h3>
-      <p id="setAccount"></p>
-      <div class="acts"><button type="button" class="btn" id="signOut">로그아웃</button></div>
-    </div>
-    <div class="set-sec" id="secPush">
-      <h3>월요일 알림</h3>
-      <p>매주 월요일 오전 8:30에 이번 주 체크리스트 요약을 이 기기로 보냅니다.</p>
-      <div class="acts">
-        <button type="button" class="btn primary" id="pushOn">이 기기에서 알림 켜기</button>
-        <button type="button" class="btn" id="pushOff" hidden>알림 끄기</button>
-        <button type="button" class="btn" id="pushTest" hidden>지금 테스트 알림 받기</button>
-      </div>
-      <div class="set-msg" id="pushMsg" role="status"></div>
-    </div>
-    <div class="set-sec">
-      <h3>앱으로 설치</h3>
-      <p id="installText"></p>
-      <div class="acts"><button type="button" class="btn" id="installBtn" hidden>이 기기에 설치</button></div>
-    </div>
-    <div class="set-sec">
-      <h3>백업</h3>
-      <p>할 일 전체를 JSON 파일로 내려받거나, 백업 파일에서 불러옵니다. 같은 항목은 파일 내용으로 덮어씁니다.</p>
-      <div class="acts">
-        <button type="button" class="btn" id="exportBtn">내보내기</button>
-        <button type="button" class="btn" id="importBtn">가져오기</button>
-        <input type="file" id="importFile" accept="application/json,.json" hidden>
-      </div>
-      <div class="set-msg" id="backupMsg" role="status"></div>
-    </div>
-    <div class="ed-actions"><span class="spacer"></span><button type="button" class="btn" id="setClose">닫기</button></div>
-  </div>
-</dialog>
+<dialog id="sheet" aria-label="편집"></dialog>
+<div id="toast" class="toast" role="status" hidden></div>
 
 <script src="vendor/supabase.js"></script>
 <script src="config.js"></script>
-<script src="app.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

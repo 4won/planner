@@ -2,3 +2,4 @@
 .cron-secret.local.txt
 *.local.*
 node_modules/
+supabase/.temp/
