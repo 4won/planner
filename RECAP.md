@@ -77,7 +77,8 @@ npx -y supabase db query --remote=ljltbagrjoowcseedwnw --read-only "select creat
 
 - `kind`: `task`(업무) 또는 `event`(일정)
 - 업무: `due`(마감일), `lead`(며칠 전부터 체크리스트에 올릴지, 기본 0)
-- 일정: `startDate`, `startTime`(종일이면 생략), `endTime`, `location`
+  - `groupName`: 프로젝트 안의 그룹 이름. 이미 있는 그룹이면 그 그룹이, 없으면 앱에서 "+ 새 그룹"으로 미리 채워진다. 그룹 목록은 `select id, project_id, name from public.project_groups`로 확인한다.
+- 일정: `startDate`, `endDate`(여러 날이면, 하루면 생략), `startTime`(종일이면 생략), `endTime`, `location`
 - `id`는 리캡 안에서만 고유하면 된다(p1, p2 …). `status`는 항상 `pending`으로 넣는다.
 
 ## 4. 저장

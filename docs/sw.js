@@ -1,8 +1,8 @@
 // App shell: network first so a new deploy shows up right away, cache as the offline fallback.
-const CACHE = 'wcp-v2';
+const CACHE = 'wcp-v4';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/badge-96.png',
   'js/main.js', 'js/store.js', 'js/db.js', 'js/model.js', 'js/dates.js', 'js/ui.js', 'js/editors.js',
-  'js/views/common.js', 'js/views/home.js', 'js/views/calendar.js', 'js/views/projects.js', 'js/views/memos.js', 'js/views/settings.js'];
+  'js/views/common.js', 'js/views/week.js', 'js/views/dashboard.js', 'js/views/calendar.js', 'js/views/projects.js', 'js/views/memos.js', 'js/views/settings.js'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', e => {
@@ -28,7 +28,8 @@ self.addEventListener('fetch', e => {
   }
   if (url.origin !== self.location.origin) return; // Supabase API and anything else go straight to the network
 
-  e.respondWith(fetch(req).then(res => {
+  // no-cache: revalidate with the server so a deploy never mixes old and new modules.
+  e.respondWith(fetch(req, { cache: 'no-cache' }).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;
   }).catch(() => caches.match(req, { ignoreSearch: true })

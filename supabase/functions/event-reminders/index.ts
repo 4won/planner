@@ -2,8 +2,9 @@
 // in the last few minutes. reminder_log makes each (event, minutes, moment) fire only once, and a
 // moved event gets its reminders again because the moment is part of the key.
 import { CORS, json, adminClient, caller, sendPush, type Sub, DAY, fmtDate, seoulToday, seoulInstant } from '../_shared/push.ts';
+import { occurrenceStarts, type Recur } from '../_shared/recur.ts';
 
-type Ev = { id: string; user_id: string; title: string; start_date: string; start_time: string | null; end_time: string | null; location: string; remind_minutes: number[] };
+type Ev = { id: string; user_id: string; title: string; start_date: string; end_date: string; start_time: string | null; end_time: string | null; location: string; remind_minutes: number[]; recur: Recur | null };
 const ALL_DAY_AT = '09:00'; // all-day events remind relative to 9 AM
 const WINDOW = 5 * 60000;   // tolerate a late or skipped cron tick
 
@@ -17,18 +18,21 @@ Deno.serve(async req => {
 
   const now = Date.now();
   const today = seoulToday();
-  // Reminders reach at most a week ahead.
+  // Reminders reach at most a week ahead; repeating events are expanded into that window.
+  const from = fmtDate(today - DAY), to = fmtDate(today + 8 * DAY);
   const { data: evs, error } = await admin.from('events')
-    .select('id,user_id,title,start_date,start_time,end_time,location,remind_minutes')
-    .gte('start_date', fmtDate(today - DAY)).lte('start_date', fmtDate(today + 8 * DAY));
+    .select('id,user_id,title,start_date,end_date,start_time,end_time,location,remind_minutes,recur')
+    .lte('start_date', to).or(`start_date.gte.${from},recur.not.is.null`);
   if (error) return json({ error: error.message }, 500);
 
   const due: { ev: Ev; minutes: number; fireAt: number; startAt: number }[] = [];
   for (const ev of (evs ?? []) as Ev[]) {
-    const startAt = seoulInstant(ev.start_date, ev.start_time ?? ALL_DAY_AT);
-    for (const m of ev.remind_minutes ?? []) {
-      const fireAt = startAt - m * 60000;
-      if (fireAt <= now && fireAt > now - WINDOW) due.push({ ev, minutes: m, fireAt, startAt });
+    for (const day of occurrenceStarts(ev, from, to)) {
+      const startAt = seoulInstant(day, ev.start_time ?? ALL_DAY_AT);
+      for (const m of ev.remind_minutes ?? []) {
+        const fireAt = startAt - m * 60000;
+        if (fireAt <= now && fireAt > now - WINDOW) due.push({ ev, minutes: m, fireAt, startAt });
+      }
     }
   }
   if (!due.length) return json({ checked: evs?.length ?? 0, sent: 0 });

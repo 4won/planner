@@ -2,8 +2,8 @@
 // All of them render into the single <dialog id="sheet">.
 import { $, el, btn, option, armedDelete, ddayEl } from './ui.js';
 import { ymd, today, parse, addDays, weekStart, mdLong, newId, leadLabel, okDate, remindLabel } from './dates.js';
-import { COLORS, STATUSES, PRIORITIES, REMIND_OPTIONS, normTask, normEvent, normProject, normGroup, withStatus, eventsOn, eventTimeText } from './model.js';
-import { tasks, events, projects, groups, activeProjects, allEvents, projectName } from './db.js';
+import { COLORS, COLOR_NAMES, STATUSES, PRIORITIES, REMIND_OPTIONS, normTask, normEvent, normProject, normGroup, nextGroupColor, withStatus, eventsOn, eventTimeText, normRecur, recurText, channelLabel } from './model.js';
+import { tasks, events, projects, groups, activeProjects, allEvents, promosIn, projectName } from './db.js';
 
 const sheet = () => $('#sheet');
 let nav = () => {};
@@ -43,7 +43,7 @@ function select(id, opts, value) {
 function swatches(name, value) {
   const w = el('div', 'swatches');
   COLORS.forEach(c => {
-    const l = el('label', 'c-' + c); l.title = c;
+    const l = el('label', 'c-' + c); l.title = COLOR_NAMES[c];
     const r = el('input'); r.type = 'radio'; r.name = name; r.value = c; r.checked = c === value;
     l.append(r); w.append(l);
   });
@@ -59,8 +59,48 @@ function actions(form, { onDelete, extra = [], saveLabel = '저장' }) {
   a.append(s);
   form.append(a);
 }
-const projectOptions = () => [['', '프로젝트 없음'], ...activeProjects().map(p => [p.id, p.name])];
-const groupOptions = pid => [['', '그룹 없음'], ...groups.all().filter(g => g.projectId === pid).sort((a, b) => a.sort - b.sort).map(g => [g.id, g.name])];
+export const projectOptions = () => [['', '프로젝트 없음'], ...activeProjects().map(p => [p.id, p.name])];
+export const groupsOf = pid => groups.all().filter(g => g.projectId === pid).sort((a, b) => a.sort - b.sort);
+
+/**
+ * Group dropdown with a "+ 새 그룹…" choice that reveals a name box in place.
+ * resolve() returns the chosen group id, creating the new group first when needed.
+ */
+export function groupPicker(projectId, groupId, { newName = '', onChange } = {}) {
+  const wrap = el('div', 'gpick');
+  const sel = el('select'); sel.setAttribute('aria-label', '그룹');
+  const name = el('input'); name.type = 'text'; name.placeholder = '새 그룹 이름'; name.maxLength = 60; name.setAttribute('aria-label', '새 그룹 이름');
+  let pid = projectId || null;
+  const fill = keep => {
+    sel.textContent = '';
+    sel.append(option('', pid ? '그룹 없음' : '프로젝트를 먼저 고르세요'));
+    if (pid) { groupsOf(pid).forEach(g => sel.append(option(g.id, g.name))); sel.append(option('__new', '+ 새 그룹…')); }
+    sel.disabled = !pid;
+    sel.value = [...sel.options].some(o => o.value === keep) ? keep : '';
+    name.hidden = sel.value !== '__new';
+  };
+  sel.addEventListener('change', () => { name.hidden = sel.value !== '__new'; if (!name.hidden) name.focus(); if (onChange) onChange(); });
+  name.addEventListener('input', () => { if (onChange) onChange(); });
+  name.value = newName;
+  fill(groupId || (newName ? '__new' : ''));
+  wrap.append(sel, name);
+  return {
+    el: wrap,
+    get value() { return sel.value; },
+    get newName() { return name.value; },
+    setProject(p) { pid = p || null; fill(''); if (onChange) onChange(); },
+    resolve() {
+      if (sel.value !== '__new') return sel.value || null;
+      const n = name.value.trim();
+      if (!n || !pid) return null;
+      const existing = groupsOf(pid).find(g => g.name === n);
+      if (existing) return existing.id;
+      const g = normGroup(newId('g'), { projectId: pid, name: n, color: nextGroupColor(groupsOf(pid).length), sort: Date.now() });
+      groups.put(g);
+      return g.id;
+    },
+  };
+}
 
 // ---------- task ----------
 export function openTask(id, preset = {}, onSaved) {
@@ -70,9 +110,10 @@ export function openTask(id, preset = {}, onSaved) {
     form.append(field('제목', input('t-title', 'text', base.title === '(제목 없음)' ? '' : base.title, { maxlength: 120, placeholder: '예: 겨울 시즌 매장 VMD 교체' }), 't-title'));
 
     const pSel = select('t-project', projectOptions(), base.projectId || '');
-    const gSel = select('t-group', groupOptions(base.projectId), base.groupId || '');
-    pSel.addEventListener('change', () => { gSel.textContent = ''; groupOptions(pSel.value || null).forEach(([v, l]) => gSel.append(option(v, l))); });
-    const row1 = el('div', 'two'); row1.append(field('프로젝트', pSel, 't-project'), field('그룹', gSel, 't-group'));
+    const gp = groupPicker(base.projectId, base.groupId);
+    pSel.addEventListener('change', () => gp.setProject(pSel.value || null));
+    const gf = el('div', 'field'); gf.append(el('span', 'lbl', '그룹'), gp.el);
+    const row1 = el('div', 'two'); row1.append(field('프로젝트', pSel, 't-project'), gf);
     form.append(row1);
 
     const row2 = el('div', 'two');
@@ -128,7 +169,7 @@ export function openTask(id, preset = {}, onSaved) {
         color: pickedColor(form, 't-color') || base.color,
         memo: memo.value,
         projectId: pSel.value || null,
-        groupId: gSel.value || null,
+        groupId: pSel.value ? gp.resolve() : null,
         priority: Number(form.querySelector('#t-priority').value),
         startDate: form.querySelector('#t-start').value || null,
         sort: base.sort || Date.now(),
@@ -142,8 +183,10 @@ export function openTask(id, preset = {}, onSaved) {
 }
 
 // ---------- event ----------
+// preset.occDate: the occurrence that was clicked, when the event repeats.
 export function openEvent(id, preset = {}, onSaved) {
   const it = id ? events.get(id) : null;
+  const occDate = preset.occDate || (it ? it.startDate : null);
   const base = it || normEvent(newId('e'), { startTime: preset.allDay ? null : (preset.startTime || nextHalfHour()), ...preset });
   open(it ? '일정 편집' : '새 일정', form => {
     form.append(field('제목', input('e-title', 'text', base.title === '(제목 없음)' ? '' : base.title, { maxlength: 120, placeholder: '예: 주간 MD 회의' }), 'e-title'));
@@ -152,12 +195,35 @@ export function openEvent(id, preset = {}, onSaved) {
 
     const r1 = el('div', 'two');
     r1.append(field('날짜', input('e-date', 'date', base.startDate), 'e-date'), field('종료 날짜', input('e-enddate', 'date', base.endDate), 'e-enddate'));
-    form.append(r1, ad);
+    form.append(r1);
     const r2 = el('div', 'two'); r2.id = 'e-times';
     r2.append(field('시작', input('e-start', 'time', base.startTime || '09:00', { step: 300 }), 'e-start'), field('종료', input('e-end', 'time', base.endTime || '', { step: 300 }), 'e-end'));
     form.append(r2);
-    form.append(field('장소', input('e-loc', 'text', base.location, { maxlength: 200, placeholder: '예: 본사 3층 회의실' }), 'e-loc'));
 
+    // repeat: hidden until the box is ticked
+    const rep = input('e-repeat', 'checkbox'); rep.checked = !!base.recur;
+    const checks = el('div', 'checks-row'); checks.append(ad);
+    const rl = el('label', 'inline-check'); rl.htmlFor = 'e-repeat'; rl.append(rep, el('span', null, '반복'));
+    checks.append(rl); form.append(checks);
+    const rb = el('div', 'recur-box');
+    const freq = select('e-freq', [['weekly', '매주'], ['monthly', '매월'], ['yearly', '매년']], base.recur ? base.recur.freq : 'weekly');
+    rb.append(field('반복 주기', freq, 'e-freq'));
+    const wd = el('div', 'chips weekdays'); wd.setAttribute('role', 'group'); wd.setAttribute('aria-label', '반복 요일');
+    [1, 2, 3, 4, 5, 6, 0].forEach(d => {
+      const l = el('label', 'chip-check'); const c = el('input'); c.type = 'checkbox'; c.value = d;
+      c.checked = base.recur && base.recur.days.length ? base.recur.days.includes(d) : parse(base.startDate).getDay() === d;
+      l.append(c, el('span', null, '일월화수목금토'[d])); wd.append(l);
+    });
+    const wdf = el('div', 'field'); wdf.append(el('span', 'lbl', '요일'), wd); rb.append(wdf);
+    const mm = el('div', 'chips monthmode'); mm.setAttribute('role', 'radiogroup'); mm.setAttribute('aria-label', '매월 반복 방식');
+    const mmf = el('div', 'field'); mmf.append(el('span', 'lbl', '매월'), mm); rb.append(mmf);
+    const yl = el('p', 'set-small'); rb.append(yl);
+    const until = input('e-until', 'date', base.recur && base.recur.until || '');
+    rb.append(field('언제까지 (비우면 계속)', until, 'e-until'));
+    const rsum = el('div', 'hint'); rb.append(rsum);
+    form.append(rb);
+
+    form.append(field('장소', input('e-loc', 'text', base.location, { maxlength: 200, placeholder: '예: 본사 3층 회의실' }), 'e-loc'));
     const rem = el('div', 'chips'); rem.id = 'e-remind';
     REMIND_OPTIONS.forEach(m => {
       const l = el('label', 'chip-check');
@@ -166,16 +232,66 @@ export function openEvent(id, preset = {}, onSaved) {
       rem.append(l);
     });
     const rf = el('div', 'field'); rf.append(el('span', 'lbl', '알림 (휴대폰 푸시)'), rem); form.append(rf);
-
     form.append(field('프로젝트', select('e-project', projectOptions(), base.projectId || ''), 'e-project'));
     const sw = el('div', 'field'); sw.append(el('span', 'lbl', '색상'), swatches('e-color', base.color)); form.append(sw);
     const memo = el('textarea'); memo.id = 'e-memo'; memo.maxLength = 2000; memo.value = base.memo; memo.placeholder = '안건, 참석자, 링크 등';
     form.append(field('메모', memo, 'e-memo'));
 
-    const sync = () => { r2.hidden = allDay.checked; const ed = form.querySelector('#e-enddate'), sd = form.querySelector('#e-date'); if (!ed.value || ed.value < sd.value) ed.value = sd.value; };
-    allDay.addEventListener('change', sync); form.querySelector('#e-date').addEventListener('change', sync); sync();
+    const recurValue = () => {
+      if (!rep.checked) return null;
+      return normRecur({
+        freq: freq.value,
+        days: freq.value === 'weekly' ? [...wd.querySelectorAll('input:checked')].map(c => Number(c.value)) : [],
+        monthMode: (mm.querySelector('input:checked') || {}).value || 'date',
+        until: until.value || null,
+        exdates: base.recur ? base.recur.exdates : [],
+      });
+    };
+    const sync = () => {
+      r2.hidden = allDay.checked;
+      const ed = form.querySelector('#e-enddate'), sd = form.querySelector('#e-date');
+      if (!ed.value || ed.value < sd.value) ed.value = sd.value;
+      rb.hidden = !rep.checked;
+      wdf.hidden = freq.value !== 'weekly'; mmf.hidden = freq.value !== 'monthly'; yl.hidden = freq.value !== 'yearly';
+      const s = parse(sd.value || ymd(today()));
+      const keep = (mm.querySelector('input:checked') || {}).value || (base.recur && base.recur.monthMode) || 'date';
+      mm.textContent = '';
+      const nthTxt = recurText({ startDate: ymd(s), recur: { freq: 'monthly', monthMode: 'nth', days: [], exdates: [] } });
+      [['date', `${s.getDate()}일`], ['nth', nthTxt.replace('매월 ', '')]].forEach(([v, l]) => {
+        const lab = el('label', 'chip-check'); const r = el('input'); r.type = 'radio'; r.name = 'e-mm'; r.value = v; r.checked = v === keep;
+        lab.append(r, el('span', null, l)); mm.append(lab);
+      });
+      yl.textContent = `매년 ${s.getMonth() + 1}월 ${s.getDate()}일에 반복합니다.`;
+      until.min = sd.value;
+      const rv = recurValue();
+      rsum.textContent = rv ? `${recurText({ startDate: sd.value, recur: rv })} · ${sd.value.slice(5).replace('-', '/')}부터 반복합니다.` : '';
+    };
+    form.addEventListener('change', sync); form.addEventListener('input', e => { if (e.target === until || e.target.id === 'e-date') sync(); });
+    sync();
 
-    actions(form, { onDelete: it ? () => { events.remove(it.id); close(); } : null });
+    // Delete: repeating events ask which occurrences go.
+    const a = el('div', 'ed-actions');
+    if (it && it.recur) {
+      const del = btn('btn danger', '삭제…');
+      const choices = el('div', 'del-choices'); choices.hidden = true;
+      const occ = occDate && occDate >= it.startDate ? occDate : it.startDate;
+      choices.append(el('span', 'set-small', `${occ.slice(5).replace('-', '/')} 회차 기준`),
+        btn('btn danger', '이 일정만', () => { events.put({ ...it, recur: { ...it.recur, exdates: [...it.recur.exdates, occ] } }); close(); }),
+        btn('btn danger', '이 일정과 이후 전부', () => {
+          if (occ <= it.startDate) events.remove(it.id);
+          else events.put({ ...it, recur: { ...it.recur, until: ymd(addDays(parse(occ), -1)) } });
+          close();
+        }),
+        btn('btn danger', '전체 삭제', () => { events.remove(it.id); close(); }));
+      del.addEventListener('click', () => { choices.hidden = !choices.hidden; });
+      a.append(del);
+      form.append(choices);
+    } else if (it) { const d = btn('btn danger', '삭제'); armedDelete(d, () => { events.remove(it.id); close(); }); a.append(d); }
+    a.append(el('span', 'spacer'), btn('btn', '취소', close));
+    const s = el('button', 'btn primary', '저장'); s.type = 'submit'; a.append(s);
+    form.append(a);
+    if (it && it.recur) form.insertBefore(el('p', 'set-small', '반복 일정을 고치면 모든 회차에 적용됩니다.'), a);
+
     form.addEventListener('submit', e => {
       e.preventDefault();
       const title = form.querySelector('#e-title').value.trim();
@@ -191,12 +307,29 @@ export function openEvent(id, preset = {}, onSaved) {
         projectId: form.querySelector('#e-project').value || null,
         color: pickedColor(form, 'e-color') || base.color,
         memo: memo.value,
+        recur: recurValue(),
       });
       events.put(next); close();
       if (onSaved) onSaved(next);
     });
   });
 }
+
+// Read-only card for a promotion copied from the work hub.
+export function openPromo(p) {
+  open(p.title, form => {
+    const box = el('div', 'promo-info');
+    const row = (k, v) => { if (!v) return; const r = el('div', 'promo-row'); r.append(el('span', 'lbl', k), el('span', null, v)); box.append(r); };
+    row('기간', `${mdLong(parse(p.startDate))} – ${mdLong(parse(p.endDate))}`);
+    row('채널', channelLabel(p.channel));
+    row('상태', p.status === 'confirm' ? '확정' : p.status === 'discuss' ? '논의 중' : p.status);
+    if (p.memo) { const m = el('div', 'promo-memo', p.memo); box.append(m); }
+    box.append(el('p', 'set-small', '허브의 프로모션 플랜에서 자동으로 가져온 항목입니다. 내용은 허브(구글 시트)에서 고쳐 주세요.'));
+    form.append(box);
+    const a = el('div', 'ed-actions'); a.append(el('span', 'spacer'), btn('btn', '닫기', close)); form.append(a);
+  });
+}
+
 function nextHalfHour() {
   const t = new Date(); t.setMinutes(t.getMinutes() < 30 ? 30 : 60, 0, 0);
   return `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
@@ -209,7 +342,7 @@ export function openProject(id, onSaved) {
   open(p ? '프로젝트 편집' : '새 프로젝트', form => {
     form.append(field('이름', input('p-name', 'text', p ? p.name : '', { maxlength: 80, placeholder: '예: 26 FW 시즌 런칭' }), 'p-name'));
     const sw = el('div', 'field'); sw.append(el('span', 'lbl', '색상'), swatches('p-color', base.color)); form.append(sw);
-    if (!p) form.append(el('p', 'set-msg', '‘할 일’, ‘진행 중’ 두 그룹이 기본으로 만들어집니다. 나중에 이름을 바꾸거나 추가할 수 있어요.'));
+    if (!p) form.append(el('p', 'set-msg', '‘이번 달’, ‘다음 달’ 두 그룹이 기본으로 만들어집니다. 이름을 바꾸거나 그룹을 더 만들 수 있어요.'));
     const extra = [];
     if (p) extra.push(btn('btn ghost', p.archived ? '보관 해제' : '보관', () => { projects.put({ ...p, archived: !p.archived }); close(); if (onSaved) onSaved(null); }));
     actions(form, {
@@ -228,11 +361,13 @@ export function openProject(id, onSaved) {
       if (!name) { form.querySelector('#p-name').focus(); return; }
       const next = normProject(base.id, { ...base, name, color: pickedColor(form, 'p-color') || base.color });
       projects.put(next);
-      if (!p) ['할 일', '진행 중'].forEach((n, i) => groups.put(normGroup(newId('g'), { projectId: next.id, name: n, sort: i + 1 })));
+      if (!p) ['이번 달', '다음 달'].forEach((n, i) => groups.put(normGroup(newId('g'), { projectId: next.id, name: n, color: nextGroupColor(i), sort: i + 1 })));
       close(); if (onSaved) onSaved(next);
     });
   });
 }
+
+export const promoColor = p => ({ online: 'blue', offline: 'orange', both: 'violet' }[p.channel] || 'slate');
 
 // ---------- chooser and day sheet ----------
 export function openAdd(date) {
@@ -252,14 +387,14 @@ export function openDay(dateStr) {
   const d = parse(dateStr);
   open(`${d.getFullYear()}년 ${mdLong(d)}`, form => {
     const list = el('div', 'group');
-    const evs = eventsOn(allEvents(), dateStr);
+    const evs = eventsOn(allEvents(dateStr, dateStr), dateStr);
     const due = tasks.all().filter(t => t.due === dateStr);
     if (!evs.length && !due.length) list.append(el('p', 'set-msg', '이 날짜에 일정이나 마감 업무가 없습니다.'));
     evs.forEach(e => {
       const r = el('button', 'mini-row' + (e.external ? ' ext' : '')); r.type = 'button';
       r.append(el('span', 'dot c-' + e.color), el('span', 'mini-time', eventTimeText(e, dateStr)), el('span', 'mini-title', e.title));
       if (e.external) r.append(el('span', 'pill', '외부'));
-      else r.addEventListener('click', () => openEvent(e.id));
+      else r.addEventListener('click', () => openEvent(e.seriesId || e.id, { occDate: e.occDate }));
       list.append(r);
     });
     due.forEach(t => {
@@ -267,6 +402,12 @@ export function openDay(dateStr) {
       r.append(el('span', 'dot c-' + t.color), el('span', 'mini-time', '마감'), el('span', 'mini-title', t.title));
       if (t.projectId) r.append(el('span', 'pill', projectName(t.projectId)));
       r.addEventListener('click', () => openTask(t.id));
+      list.append(r);
+    });
+    promosIn(dateStr, dateStr).forEach(p => {
+      const r = el('button', 'mini-row promo'); r.type = 'button';
+      r.append(el('span', 'dot c-' + promoColor(p)), el('span', 'mini-time', '프로모션'), el('span', 'mini-title', p.title));
+      r.addEventListener('click', () => openPromo(p));
       list.append(r);
     });
     form.append(list);

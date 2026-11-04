@@ -8,21 +8,21 @@ import { openTask, openEvent, openDay } from '../editors.js';
 import { taskRow, eventRow, groupEl } from './common.js';
 import { newId } from '../dates.js';
 
-export const homeState = { week: weekStart(today()), seenWeek: weekStart(today()) };
+export const weekState = { week: weekStart(today()), seenWeek: weekStart(today()) };
 
 export function rollWeekIfNeeded() {
   const nowW = weekStart(today());
-  if (+nowW !== +homeState.seenWeek) { if (+homeState.week === +homeState.seenWeek) homeState.week = nowW; homeState.seenWeek = nowW; }
+  if (+nowW !== +weekState.seenWeek) { if (+weekState.week === +weekState.seenWeek) weekState.week = nowW; weekState.seenWeek = nowW; }
 }
 
-export function renderHome() {
-  const W = homeState.week, We = addDays(W, 6), isThis = +W === +weekStart(today());
+export function renderWeek() {
+  const W = weekState.week, We = addDays(W, 6), isThis = +W === +weekStart(today());
   const lbl = $('#wkLabel'); lbl.textContent = '';
   const range = `${W.getFullYear()}년 ${W.getMonth() + 1}월 ${W.getDate()}일 – ${We.getMonth() + 1}월 ${We.getDate()}일`;
   if (isThis) lbl.append(el('span', 'hl', range)); else lbl.textContent = range;
   lbl.append(' ', el('span', 'wkno', `W${pad(isoWeek(W))}`));
 
-  const body = $('#homeBody'); body.textContent = '';
+  const body = $('#weekBody'); body.textContent = '';
   if (!state.loaded) { body.append(el('div', 'empty', '불러오는 중…')); $('#wkMeta').textContent = ''; return; }
 
   // ---- events, day by day ----
@@ -85,8 +85,8 @@ function addExamples() {
   ].forEach(o => tasks.put(normTask(newId(), { ...o, created: ymd(t), sort: Date.now() })));
 }
 
-export function wireHome() {
-  $('#wkPrev').addEventListener('click', () => { homeState.week = addDays(homeState.week, -7); window.dispatchEvent(new Event('planner:render')); });
-  $('#wkNext').addEventListener('click', () => { homeState.week = addDays(homeState.week, 7); window.dispatchEvent(new Event('planner:render')); });
-  $('#wkToday').addEventListener('click', () => { homeState.week = weekStart(today()); window.dispatchEvent(new Event('planner:render')); });
+export function wireWeek() {
+  $('#wkPrev').addEventListener('click', () => { weekState.week = addDays(weekState.week, -7); window.dispatchEvent(new Event('planner:render')); });
+  $('#wkNext').addEventListener('click', () => { weekState.week = addDays(weekState.week, 7); window.dispatchEvent(new Event('planner:render')); });
+  $('#wkToday').addEventListener('click', () => { weekState.week = weekStart(today()); window.dispatchEvent(new Event('planner:render')); });
 }

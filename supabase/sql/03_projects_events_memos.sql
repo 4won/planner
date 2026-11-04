@@ -150,3 +150,6 @@ do $$ declare t text; begin
     exception when duplicate_object then null; end;
   end loop;
 end $$;
+
+-- v3: group colors
+alter table public.project_groups add column if not exists color text not null default 'teal';

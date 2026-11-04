@@ -2,8 +2,9 @@
 // Google Calendar ("URL로 추가") and Apple Calendar (구독 캘린더) poll this address.
 // Deploy with --no-verify-jwt: calendar apps can't send headers, so the token is the key.
 import { adminClient, DAY, fmtDate, seoulToday, parseDate } from '../_shared/push.ts';
+import { rruleLines, type Recur } from '../_shared/recur.ts';
 
-type Ev = { id: string; title: string; start_date: string; start_time: string | null; end_date: string; end_time: string | null; location: string; memo: string; updated_at: string };
+type Ev = { id: string; title: string; start_date: string; start_time: string | null; end_date: string; end_time: string | null; location: string; memo: string; updated_at: string; recur: Recur | null };
 type Task = { id: string; title: string; due: string; done: boolean; memo: string; updated_at: string };
 
 const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
@@ -35,7 +36,7 @@ Deno.serve(async req => {
 
   const from = fmtDate(seoulToday() - 90 * DAY);
   const [{ data: evs }, { data: tasks }] = await Promise.all([
-    admin.from('events').select('id,title,start_date,start_time,end_date,end_time,location,memo,updated_at').eq('user_id', feed.user_id).gte('end_date', from),
+    admin.from('events').select('id,title,start_date,start_time,end_date,end_time,location,memo,updated_at,recur').eq('user_id', feed.user_id).or(`end_date.gte.${from},recur.not.is.null`),
     admin.from('tasks').select('id,title,due,done,memo,updated_at').eq('user_id', feed.user_id).not('due', 'is', null).gte('due', from),
   ]);
 
@@ -53,6 +54,7 @@ Deno.serve(async req => {
     } else {
       L.push(`DTSTART;VALUE=DATE:${d8(e.start_date)}`, `DTEND;VALUE=DATE:${d8(nextDay(e.end_date))}`);
     }
+    L.push(...rruleLines(e, d => e.start_time ? `;TZID=Asia/Seoul:${dt(d, e.start_time)}` : `;VALUE=DATE:${d8(d)}`));
     L.push(`SUMMARY:${esc(e.title)}`);
     if (e.location) L.push(`LOCATION:${esc(e.location)}`);
     if (e.memo) L.push(`DESCRIPTION:${esc(e.memo)}`);

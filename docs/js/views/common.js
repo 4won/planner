@@ -1,7 +1,7 @@
 // Rows shared by several screens.
 import { el, btn, ddayEl, CHECK_SVG } from '../ui.js';
 import { ymd, parse, md, today, weekStart, leadLabel } from '../dates.js';
-import { weekRole, isCheckedIn, completionDate, withStatus, statusLabel, eventTimeText } from '../model.js';
+import { weekRole, isCheckedIn, completionDate, withStatus, statusLabel, eventTimeText, recurText } from '../model.js';
 import { tasks, projectName } from '../db.js';
 import { openTask, openEvent } from '../editors.js';
 
@@ -62,11 +62,11 @@ export function eventRow(e, dayStr) {
   const m = el('span', 'ev-main');
   const t = el('span', 'ev-title'); t.append(el('span', 'dot c-' + e.color), el('span', null, e.title));
   m.append(t);
-  const meta = [e.location, e.projectId ? projectName(e.projectId) : '', e.external ? '외부 캘린더' : ''].filter(Boolean).join(' · ');
+  const meta = [e.location, e.projectId ? projectName(e.projectId) : '', e.recur ? recurText(e) : '', e.external ? '외부 캘린더' : ''].filter(Boolean).join(' · ');
   if (meta) m.append(el('span', 'ev-meta', meta));
   r.append(m);
-  if (e.external) r.disabled = false, r.title = '외부 캘린더 일정은 원래 캘린더에서 고쳐 주세요';
-  else r.addEventListener('click', () => openEvent(e.id));
+  if (e.external) r.title = '외부 캘린더 일정은 원래 캘린더에서 고쳐 주세요';
+  else r.addEventListener('click', () => openEvent(e.seriesId || e.id, { occDate: e.occDate }));
   return r;
 }
 

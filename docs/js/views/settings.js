@@ -1,7 +1,7 @@
 // Settings sheet: account, push, install, calendar links, backup.
 import { $, el, btn, option, armedDelete, copyText } from '../ui.js';
 import { ymd, today, newId } from '../dates.js';
-import { COLORS, normExtCal } from '../model.js';
+import { COLORS, COLOR_NAMES, normExtCal } from '../model.js';
 import { CLOUD, sb, state, config, refresh } from '../store.js';
 import { tasks, projects, groups, events, memos, entries, recaps, extCals, extEvents } from '../db.js';
 import { normTask, normProject, normGroup, normEvent, normMemo, normEntry } from '../model.js';
@@ -180,7 +180,7 @@ function calendarSection() {
   const name = el('input'); name.type = 'text'; name.placeholder = '이름 (예: 회사 구글)'; name.maxLength = 60; name.setAttribute('aria-label', '캘린더 이름');
   const url = el('input'); url.type = 'url'; url.placeholder = 'https://… 또는 webcal://… (.ics)'; url.setAttribute('aria-label', 'iCal 주소');
   const color = el('select'); color.setAttribute('aria-label', '색');
-  [['slate', '회청'], ['teal', '청록'], ['amber', '호박'], ['rose', '장미'], ['violet', '보라']].forEach(([v, l]) => color.append(option(v, l)));
+  ['slate', ...COLORS.filter(c => c !== 'slate')].forEach(v => color.append(option(v, COLOR_NAMES[v])));
   const add = el('button', 'btn', '추가'); add.type = 'submit';
   form.append(name, url, color, add);
   form.addEventListener('submit', async e => {
@@ -250,4 +250,3 @@ async function importData(file, m) {
     say(m, `${n}개 항목을 불러왔습니다.`);
   } catch (e) { say(m, `불러오지 못했습니다: ${e.message}`, true); }
 }
-export { COLORS };

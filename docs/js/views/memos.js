@@ -5,7 +5,7 @@ import { ymd, parse, md, today, hhmm, newId } from '../dates.js';
 import { normMemo, normEntry, normTask, normEvent } from '../model.js';
 import { memos, entries, recaps, tasks, events, projects, activeProjects } from '../db.js';
 import { state } from '../store.js';
-import { openTask, openEvent } from '../editors.js';
+import { openTask, openEvent, groupPicker, groupsOf } from '../editors.js';
 
 export const memoState = { id: null, pane: false };
 const drafts = new Map(); // `${recapId}:${proposalId}` -> edited fields not yet registered
@@ -74,7 +74,6 @@ export function renderMemos() {
   const nearBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 80;
   stream.textContent = '';
   const es = entriesOf(m.id);
-  if (!es.length) stream.append(el('p', 'quiet center', '아래 칸에 적고 엔터를 누르면 한 줄씩 쌓입니다. 줄바꿈은 Shift+엔터.'));
   let lastDay = '';
   es.forEach(e => {
     const d = dayOf(e.createdAt);
@@ -125,6 +124,14 @@ function suggestProject(p) {
   const hit = activeProjects().find(x => x.name.toLowerCase() === n) || activeProjects().find(x => x.name.toLowerCase().includes(n) || n.includes(x.name.toLowerCase()));
   return hit ? hit.id : '';
 }
+function suggestGroup(p, projectId) {
+  if (!projectId) return { groupId: '', newGroup: '' };
+  if (p.groupId && groupsOf(projectId).some(g => g.id === p.groupId)) return { groupId: p.groupId, newGroup: '' };
+  const n = (p.groupName || '').trim();
+  if (!n) return { groupId: '', newGroup: '' };
+  const hit = groupsOf(projectId).find(g => g.name === n);
+  return hit ? { groupId: hit.id, newGroup: '' } : { groupId: '__new', newGroup: n };
+}
 
 function recapCard(r, m, expanded) {
   const card = el('details', 'recap'); card.open = expanded || r.proposals.some(p => p.status === 'pending');
@@ -137,34 +144,56 @@ function recapCard(r, m, expanded) {
 
   if (r.proposals.length) {
     const list = el('div', 'props');
+    let updateCount = () => {};
     r.proposals.forEach(p => {
       const key = `${r.id}:${p.id}`;
-      const d = drafts.get(key) || { checked: p.status === 'pending', title: p.title, due: p.due || p.startDate || '', startTime: p.startTime || '', projectId: suggestProject(p) };
-      drafts.set(key, d);
-      const row = el('div', 'prop' + (p.status !== 'pending' ? ' settled' : ''));
-      const cb = el('input'); cb.type = 'checkbox'; cb.checked = p.status === 'pending' && d.checked; cb.disabled = p.status !== 'pending';
+      let d = drafts.get(key);
+      if (!d) {
+        const projectId = suggestProject(p);
+        d = { checked: p.status === 'pending', title: p.title, due: p.kind === 'event' ? (p.startDate || p.due || '') : (p.due || ''), endDate: p.endDate || '', startTime: p.startTime || '', endTime: p.endTime || '', projectId, ...suggestGroup(p, projectId) };
+        drafts.set(key, d);
+      }
+      const settled = p.status !== 'pending';
+      const row = el('div', 'prop' + (settled ? ' settled' : ''));
+      const cb = el('input'); cb.type = 'checkbox'; cb.checked = !settled && d.checked; cb.disabled = settled;
       cb.setAttribute('aria-label', `${p.title} 등록할지 선택`);
       cb.addEventListener('change', () => { d.checked = cb.checked; updateCount(); });
       row.append(cb, el('span', 'pill kind-' + p.kind, p.kind === 'event' ? '일정' : '업무'));
       const fields = el('div', 'prop-fields');
-      const ti = el('input', 'prop-title'); ti.type = 'text'; ti.value = d.title; ti.maxLength = 120; ti.disabled = p.status !== 'pending'; ti.setAttribute('aria-label', '제목');
+      const ti = el('input', 'prop-title'); ti.type = 'text'; ti.value = d.title; ti.maxLength = 120; ti.disabled = settled; ti.setAttribute('aria-label', '제목');
       ti.addEventListener('input', () => { d.title = ti.value; });
       fields.append(ti);
+
       const line = el('div', 'prop-line');
-      const di = el('input'); di.type = 'date'; di.value = d.due; di.disabled = p.status !== 'pending'; di.setAttribute('aria-label', p.kind === 'event' ? '날짜' : '마감일');
-      di.addEventListener('input', () => { d.due = di.value; });
-      line.append(di);
+      const labeled = (text, input) => { const l = el('label', 'prop-field'); l.append(el('span', null, text), input); return l; };
+      const dateIn = (val, aria, onIn) => { const i = el('input'); i.type = 'date'; i.value = val; i.disabled = settled; i.setAttribute('aria-label', aria); i.addEventListener('input', () => onIn(i.value)); return i; };
+      const timeIn = (val, aria, onIn) => { const i = el('input'); i.type = 'time'; i.step = 300; i.value = val; i.disabled = settled; i.setAttribute('aria-label', aria); i.addEventListener('input', () => onIn(i.value)); return i; };
       if (p.kind === 'event') {
-        const tm = el('input'); tm.type = 'time'; tm.value = d.startTime; tm.disabled = p.status !== 'pending'; tm.setAttribute('aria-label', '시작 시간');
-        tm.addEventListener('input', () => { d.startTime = tm.value; });
-        line.append(tm);
+        const endIn = dateIn(d.endDate, '종료일', v => { d.endDate = v; });
+        endIn.placeholder = '같은 날';
+        line.append(
+          labeled('시작일', dateIn(d.due, '시작일', v => { d.due = v; if (d.endDate && d.endDate < v) { d.endDate = ''; endIn.value = ''; } endIn.min = v; })),
+          labeled('종료일', endIn),
+          labeled('시작', timeIn(d.startTime, '시작 시간', v => { d.startTime = v; })),
+          labeled('종료', timeIn(d.endTime, '종료 시간', v => { d.endTime = v; })),
+        );
+        if (d.due) endIn.min = d.due;
+      } else {
+        line.append(labeled('마감', dateIn(d.due, '마감일', v => { d.due = v; })));
       }
-      const ps = el('select'); ps.disabled = p.status !== 'pending'; ps.setAttribute('aria-label', '프로젝트');
+      const ps = el('select'); ps.disabled = settled; ps.setAttribute('aria-label', '프로젝트');
       ps.append(option('', p.projectName && !d.projectId ? `프로젝트 없음 (제안: ${p.projectName})` : '프로젝트 없음', !d.projectId));
       activeProjects().forEach(x => ps.append(option(x.id, x.name, x.id === d.projectId)));
-      ps.addEventListener('change', () => { d.projectId = ps.value; });
-      line.append(ps);
+      line.append(labeled('프로젝트', ps));
+      if (p.kind === 'task') {
+        const gp = groupPicker(d.projectId, d.groupId === '__new' ? '' : d.groupId, { newName: d.groupId === '__new' ? d.newGroup : '', onChange: () => { d.groupId = gp.value; d.newGroup = gp.newName; } });
+        if (settled) gp.el.querySelectorAll('select, input').forEach(x => { x.disabled = true; });
+        ps.addEventListener('change', () => { d.projectId = ps.value; gp.setProject(ps.value || null); });
+        d.picker = gp;
+        line.append(labeled('그룹', gp.el));
+      } else ps.addEventListener('change', () => { d.projectId = ps.value; });
       fields.append(line);
+      if (p.kind === 'event') fields.append(el('div', 'prop-hint', '종료일을 비워 두면 시작일 하루 일정으로 등록됩니다.'));
       if (p.note) fields.append(el('div', 'prop-note', p.note));
       if (p.status === 'added') fields.append(el('div', 'prop-note ok', '등록됨'));
       if (p.status === 'dismissed') fields.append(el('div', 'prop-note', '제외됨'));
@@ -175,7 +204,7 @@ function recapCard(r, m, expanded) {
 
     const acts = el('div', 'ed-actions');
     const reg = btn('btn primary', '');
-    const updateCount = () => { const n = r.proposals.filter(p => p.status === 'pending' && drafts.get(`${r.id}:${p.id}`)?.checked).length; reg.textContent = `선택 항목 등록 (${n})`; reg.disabled = !n; };
+    updateCount = () => { const n = r.proposals.filter(p => p.status === 'pending' && drafts.get(`${r.id}:${p.id}`)?.checked).length; reg.textContent = `선택 항목 등록 (${n})`; reg.disabled = !n; };
     reg.addEventListener('click', () => register(r, m));
     const dis = btn('btn ghost', '선택 안 한 제안 제외', () => {
       recaps.put({ ...r, proposals: r.proposals.map(p => p.status === 'pending' && !drafts.get(`${r.id}:${p.id}`)?.checked ? { ...p, status: 'dismissed' } : p) });
@@ -195,12 +224,17 @@ function register(r, m) {
     const d = drafts.get(`${r.id}:${p.id}`);
     if (p.status !== 'pending' || !d || !d.checked || !d.title.trim()) return p;
     n++;
+    const memo = [p.note, `메모: ${m.title}`].filter(Boolean).join('\n');
     if (p.kind === 'event') {
-      const ev = normEvent(newId('e'), { title: d.title.trim(), startDate: d.due || ymd(today()), endDate: d.due || ymd(today()), startTime: d.startTime || null, endTime: p.endTime, location: p.location, memo: [p.note, `메모: ${m.title}`].filter(Boolean).join('\n'), projectId: d.projectId || null });
+      const start = d.due || ymd(today());
+      const ev = normEvent(newId('e'), { title: d.title.trim(), startDate: start, endDate: d.endDate && d.endDate >= start ? d.endDate : start, startTime: d.startTime || null, endTime: d.endTime || null, location: p.location, memo, projectId: d.projectId || null });
       events.put(ev);
       return { ...p, status: 'added', createdRef: `event:${ev.id}` };
     }
-    const t = normTask(newId(), { title: d.title.trim(), due: d.due || null, lead: p.lead || 0, repeat: false, memo: [p.note, `메모: ${m.title}`].filter(Boolean).join('\n'), projectId: d.projectId || null, sort: Date.now() });
+    // Resolving the picker creates a typed-in new group once; later proposals naming it reuse it.
+    const groupId = d.projectId && d.picker ? d.picker.resolve() : null;
+    d.groupId = groupId || ''; d.newGroup = '';
+    const t = normTask(newId(), { title: d.title.trim(), due: d.due || null, lead: p.lead || 0, repeat: false, memo, projectId: d.projectId || null, groupId, sort: Date.now() + n });
     tasks.put(t);
     return { ...p, status: 'added', createdRef: `task:${t.id}` };
   });

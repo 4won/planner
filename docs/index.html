@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-title" content="체크 플래너">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -41,99 +41,141 @@
   </form>
 </section>
 
-<div class="app" id="main" hidden>
-  <header class="top">
-    <div class="brand">
-      <h1>주간 체크 플래너</h1>
-      <p><span class="sync-dot" id="syncDot"></span><span id="syncNote">불러오는 중…</span></p>
-    </div>
-    <nav class="tabs nav" role="tablist" aria-label="화면 전환">
-      <button type="button" role="tab" data-view="home" aria-selected="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 17l2 2 4-4"/></svg><span>이번 주</span></button>
-      <button type="button" role="tab" data-view="calendar" aria-selected="false"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>캘린더</span></button>
-      <button type="button" role="tab" data-view="projects" aria-selected="false"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="16.5" y="4" width="4" height="13" rx="1.5"/></svg><span>프로젝트</span></button>
-      <button type="button" role="tab" data-view="memos" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg><span>메모</span></button>
+<div class="shell" id="main" hidden>
+  <aside class="side" aria-label="메뉴">
+    <div class="side-brand"><img src="icons/icon-192.png" alt="" width="28" height="28"><b>주간 체크 플래너</b></div>
+    <button class="btn primary side-add js-add" type="button">+ 추가</button>
+    <nav class="side-nav" aria-label="화면">
+      <button type="button" data-view="home"><svg viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5"/><path d="M6 9.5V19h12V9.5"/></svg><span>홈</span></button>
+      <button type="button" data-view="week"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 17l2 2 4-4"/></svg><span>이번 주</span></button>
+      <button type="button" data-view="calendar"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>캘린더</span></button>
+      <button type="button" data-view="memos"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg><span>메모</span></button>
     </nav>
-    <button class="btn primary" id="addBtn" type="button">+ 추가</button>
-    <button class="iconbtn" id="setBtn" type="button" aria-label="설정">
-      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-    </button>
-  </header>
-
-  <div id="banner" class="banner" hidden></div>
-
-  <section id="view-home" class="view">
-    <div class="periodbar">
-      <button class="navbtn" id="wkPrev" type="button" aria-label="이전 주">‹</button>
-      <button class="navbtn" id="wkNext" type="button" aria-label="다음 주">›</button>
-      <div class="period">
-        <div class="period-label" id="wkLabel"></div>
-        <div class="period-meta" id="wkMeta"></div>
+    <div class="side-sec">
+      <div class="side-sec-head">
+        <button type="button" class="side-sec-title" data-view="projects">프로젝트</button>
+        <button type="button" class="side-plus" id="sideNewProject" aria-label="새 프로젝트" title="새 프로젝트">+</button>
       </div>
-      <button class="btn ghost" id="wkToday" type="button">이번 주로</button>
+      <div class="side-projects" id="sideProjects"></div>
     </div>
-    <div id="homeBody" class="home-body"></div>
-  </section>
+    <div class="side-foot">
+      <p class="sync-line"><span class="sync-dot js-sync-dot"></span><span class="js-sync-note">불러오는 중…</span></p>
+      <button class="iconbtn js-settings" type="button" aria-label="설정" title="설정">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+  </aside>
 
-  <section id="view-calendar" class="view" hidden>
-    <div class="periodbar">
-      <button class="navbtn" id="mPrev" type="button" aria-label="이전 달">‹</button>
-      <button class="navbtn" id="mNext" type="button" aria-label="다음 달">›</button>
-      <div class="period"><div class="period-label" id="mLabel"></div><div class="period-meta" id="mMeta"></div></div>
-      <button class="btn ghost" id="mToday" type="button">이번 달로</button>
-    </div>
-    <div class="cal-wrap"><div class="cal" id="cal"></div></div>
-    <div class="legend">
-      <span><i class="lg-ev"></i>일정</span>
-      <span><i class="lg-task"></i>업무 마감</span>
-      <span><i class="lg-ext"></i>구글·애플 일정</span>
-      <span><i class="lg-band"></i>미리 챙기는 기간</span>
-    </div>
-    <div class="agenda" id="agenda"></div>
-  </section>
-
-  <section id="view-projects" class="view" hidden>
-    <div class="chips-row" id="projChips"></div>
-    <div class="proj-bar">
-      <div id="projHead" class="proj-head"></div>
-      <div class="tabs small" role="tablist" aria-label="보기 방식">
-        <button type="button" data-pview="table" aria-selected="true">표</button>
-        <button type="button" data-pview="board" aria-selected="false">보드</button>
-        <button type="button" data-pview="timeline" aria-selected="false">타임라인</button>
+  <div class="mainarea">
+    <header class="mtop">
+      <div class="brand">
+        <h1>주간 체크 플래너</h1>
+        <p><span class="sync-dot js-sync-dot"></span><span class="js-sync-note">불러오는 중…</span></p>
       </div>
-    </div>
-    <div class="toolbar">
-      <input type="search" id="projSearch" placeholder="업무 검색" aria-label="업무 검색">
-      <label class="inline-check" for="hideDone"><input type="checkbox" id="hideDone" checked><span>완료 숨기기</span></label>
-    </div>
-    <div id="projBody" class="proj-body"></div>
-  </section>
+      <button class="btn primary js-add" type="button">+ 추가</button>
+      <button class="iconbtn js-settings" type="button" aria-label="설정">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </header>
 
-  <section id="view-memos" class="view" hidden>
-    <div class="memo-layout" id="memoLayout">
-      <aside class="memo-side">
-        <button class="btn primary" id="memoNew" type="button">+ 새 메모</button>
-        <div id="memoItems" class="memo-items"></div>
-      </aside>
-      <section class="memo-pane" id="memoPane" hidden>
-        <div class="memo-head">
-          <button class="navbtn back" id="memoBack" type="button" aria-label="메모 목록으로">‹</button>
-          <input type="text" id="memoTitle" class="memo-title" maxlength="80" aria-label="메모 제목">
-          <select id="memoProject" aria-label="연결 프로젝트"></select>
-          <button class="linkbtn danger" id="memoDelete" type="button">메모 삭제</button>
+    <div id="banner" class="banner" hidden></div>
+
+    <section id="view-home" class="view">
+      <div class="page-head hello">
+        <div><h1 id="dashHello">안녕하세요</h1><p id="dashDate"></p></div>
+      </div>
+      <div id="dashBody" class="dash home-dash"></div>
+    </section>
+
+    <section id="view-week" class="view" hidden>
+      <div class="page-head"><h1>이번 주</h1></div>
+      <div class="periodbar">
+        <button class="navbtn" id="wkPrev" type="button" aria-label="이전 주">‹</button>
+        <button class="navbtn" id="wkNext" type="button" aria-label="다음 주">›</button>
+        <div class="period">
+          <div class="period-label" id="wkLabel"></div>
+          <div class="period-meta" id="wkMeta"></div>
         </div>
-        <div id="memoRecaps" class="memo-recaps"></div>
-        <div id="memoStream" class="memo-stream" aria-live="polite"></div>
-        <div class="composer">
-          <textarea id="memoInput" rows="1" placeholder="회의 내용을 적고 엔터 (줄바꿈은 Shift+엔터)" aria-label="메모 입력"></textarea>
-          <button class="btn primary" id="memoSend" type="button">보내기</button>
-        </div>
-        <div class="recap-hint" id="recapHint"></div>
-      </section>
-      <div class="memo-empty" id="memoEmpty">
-        <div class="empty"><strong>회의하면서 바로 적어 두세요</strong><p>메모방을 하나 만들고 엔터만 치면 한 줄씩 쌓입니다. 각 줄은 업무나 일정으로 바로 보낼 수 있고, Claude에게 리캡을 부탁하면 정리와 등록 제안이 여기 붙습니다.</p></div>
+        <button class="btn ghost" id="wkToday" type="button">이번 주로</button>
       </div>
-    </div>
-  </section>
+      <div id="weekBody" class="home-body"></div>
+    </section>
+
+    <section id="view-calendar" class="view" hidden>
+      <div class="cal-head">
+        <button class="btn ghost" id="mToday" type="button">오늘</button>
+        <button class="navbtn" id="mPrev" type="button" aria-label="이전">‹</button>
+        <button class="navbtn" id="mNext" type="button" aria-label="다음">›</button>
+        <h1 class="cal-title" id="mLabel"></h1>
+        <span class="spacer"></span>
+        <div class="cal-filters" role="group" aria-label="표시할 항목">
+          <label class="fchip f-todo"><input type="checkbox" data-cf="todo" checked><span>Todo</span></label>
+          <label class="fchip f-event"><input type="checkbox" data-cf="event" checked><span>일정</span></label>
+          <label class="fchip f-promo"><input type="checkbox" data-cf="promo"><span>프로모션</span></label>
+        </div>
+        <div class="seg" role="tablist" aria-label="보기">
+          <button type="button" data-calview="month" aria-selected="true">월</button>
+          <button type="button" data-calview="week" aria-selected="false">주</button>
+        </div>
+      </div>
+      <div id="cal" class="mcal"></div>
+      <div class="agenda" id="agenda"></div>
+    </section>
+
+    <section id="view-projects" class="view" hidden>
+      <div id="projOverview"></div>
+      <div id="projPage" hidden>
+        <div class="ppage-head" id="projHead"></div>
+        <div class="vtabs" role="tablist" aria-label="보기 방식">
+          <button type="button" data-pview="table" aria-selected="true">메인 테이블</button>
+          <button type="button" data-pview="board" aria-selected="false">보드</button>
+          <button type="button" data-pview="timeline" aria-selected="false">타임라인</button>
+          <button type="button" data-pview="dash" aria-selected="false">대시보드</button>
+        </div>
+        <div class="ptoolbar">
+          <button class="btn primary" id="projNewTask" type="button">+ 새 업무</button>
+          <input type="search" id="projSearch" placeholder="업무 검색" aria-label="업무 검색">
+          <label class="inline-check" for="hideDone" id="hideDoneWrap"><input type="checkbox" id="hideDone" checked><span>완료 숨기기</span></label>
+        </div>
+        <div id="projBody" class="proj-body"></div>
+      </div>
+    </section>
+
+    <section id="view-memos" class="view" hidden>
+      <div class="memo-layout" id="memoLayout">
+        <aside class="memo-side">
+          <button class="btn primary" id="memoNew" type="button">+ 새 메모</button>
+          <div id="memoItems" class="memo-items"></div>
+        </aside>
+        <section class="memo-pane" id="memoPane" hidden>
+          <div class="memo-head">
+            <button class="navbtn back" id="memoBack" type="button" aria-label="메모 목록으로">‹</button>
+            <input type="text" id="memoTitle" class="memo-title" maxlength="80" aria-label="메모 제목">
+            <select id="memoProject" aria-label="연결 프로젝트"></select>
+            <button class="linkbtn danger" id="memoDelete" type="button">메모 삭제</button>
+          </div>
+          <div id="memoRecaps" class="memo-recaps"></div>
+          <div id="memoStream" class="memo-stream" aria-live="polite"></div>
+          <div class="composer">
+            <textarea id="memoInput" rows="1" aria-label="메모 입력 (엔터로 보내기, Shift+엔터로 줄바꿈)"></textarea>
+            <button class="btn primary send-btn" id="memoSend" type="button" aria-label="보내기" title="보내기 (엔터)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5v7a3 3 0 0 1-3 3H6"/><path d="M10 11l-4 4 4 4"/></svg></button>
+          </div>
+          <div class="recap-hint" id="recapHint"></div>
+        </section>
+        <div class="memo-empty" id="memoEmpty">
+          <div class="empty"><strong>회의하면서 바로 적어 두세요</strong><p>메모방을 하나 만들고 엔터만 치면 한 줄씩 쌓입니다. 각 줄은 업무나 일정으로 바로 보낼 수 있고, Claude에게 리캡을 부탁하면 정리와 등록 제안이 여기 붙습니다.</p></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <nav class="bottom-nav" aria-label="화면">
+    <button type="button" data-view="home"><svg viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5"/><path d="M6 9.5V19h12V9.5"/></svg><span>홈</span></button>
+    <button type="button" data-view="week"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 17l2 2 4-4"/></svg><span>이번 주</span></button>
+    <button type="button" data-view="calendar"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>캘린더</span></button>
+    <button type="button" data-view="projects"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="16.5" y="4" width="4" height="13" rx="1.5"/></svg><span>프로젝트</span></button>
+    <button type="button" data-view="memos"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg><span>메모</span></button>
+  </nav>
 </div>
 
 <dialog id="sheet" aria-label="편집"></dialog>

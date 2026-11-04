@@ -1,7 +1,8 @@
 // Shapes of every record and the rules shared by several screens.
 import { okDate, okTime, ymd, today, parse, addDays, weekStart } from './dates.js';
 
-export const COLORS = ['teal', 'amber', 'rose', 'violet', 'slate'];
+export const COLORS = ['teal', 'blue', 'violet', 'rose', 'orange', 'amber', 'green', 'brown', 'slate'];
+export const COLOR_NAMES = { teal: '청록', blue: '파랑', violet: '보라', rose: '장미', orange: '주황', amber: '호박', green: '초록', brown: '갈색', slate: '회청' };
 export const STATUSES = [
   { key: 'todo', label: '할 일' },
   { key: 'doing', label: '진행 중' },
@@ -41,7 +42,9 @@ export function normTask(id, d = {}) {
   };
 }
 export const normProject = (id, d = {}) => ({ id, name: str(d.name || '새 프로젝트', 80), color: color(d.color), archived: !!d.archived, sort: Number(d.sort) || 0 });
-export const normGroup = (id, d = {}) => ({ id, projectId: optId(d.projectId), name: str(d.name || '새 그룹', 60), sort: Number(d.sort) || 0 });
+export const normGroup = (id, d = {}) => ({ id, projectId: optId(d.projectId), name: str(d.name || '새 그룹', 60), color: color(d.color), sort: Number(d.sort) || 0 });
+// Next color for a new group in a project, so neighbouring groups differ.
+export const nextGroupColor = n => ['teal', 'violet', 'orange', 'blue', 'rose', 'green', 'amber', 'brown', 'slate'][n % 9];
 export function normEvent(id, d = {}) {
   const startDate = okDate(d.startDate) ? d.startDate : ymd(today());
   const startTime = timeOf(d.startTime);
@@ -56,9 +59,85 @@ export function normEvent(id, d = {}) {
     memo: str(d.memo, 2000),
     color: color(d.color, 'violet'),
     projectId: optId(d.projectId),
+    recur: normRecur(d.recur),
     remind: Array.isArray(d.remind) ? [...new Set(d.remind.map(Number).filter(n => Number.isInteger(n) && n >= 0 && n <= 10080))].sort((a, b) => a - b) : [10],
   };
 }
+// ---- repeating events ----
+// recur: { freq: 'weekly'|'monthly'|'yearly', days: [0..6] (weekly, 0 = 일), monthMode: 'date'|'nth',
+//          until: 'YYYY-MM-DD'|null, exdates: ['YYYY-MM-DD', …] }  — null means a one-off event.
+// supabase/functions/_shared/recur.ts repeats this expansion for alerts and the calendar feed.
+export function normRecur(r) {
+  if (!r || typeof r !== 'object' || !['weekly', 'monthly', 'yearly'].includes(r.freq)) return null;
+  return {
+    freq: r.freq,
+    days: Array.isArray(r.days) ? [...new Set(r.days.map(Number).filter(n => Number.isInteger(n) && n >= 0 && n <= 6))].sort() : [],
+    monthMode: r.monthMode === 'nth' ? 'nth' : 'date',
+    until: okDate(r.until) ? r.until : null,
+    exdates: Array.isArray(r.exdates) ? [...new Set(r.exdates.filter(okDate))].sort() : [],
+  };
+}
+const NTH = ['첫째', '둘째', '셋째', '넷째', '마지막'];
+// Which "Nth weekday" a date is; the 5th one counts as "last" so it exists every month.
+const nthOf = d => { const n = Math.ceil(d.getDate() / 7); return n >= 5 ? -1 : n; };
+function nthWeekday(y, m, wd, n) {
+  if (n === -1) { const last = new Date(y, m + 1, 0); return addDays(last, -((last.getDay() - wd + 7) % 7)); }
+  const first = new Date(y, m, 1);
+  const d = addDays(first, ((wd - first.getDay() + 7) % 7) + (n - 1) * 7);
+  return d.getMonth() === m ? d : null;
+}
+export function recurText(ev) {
+  const r = ev.recur; if (!r) return '';
+  const s = parse(ev.startDate);
+  const W = ['일', '월', '화', '수', '목', '금', '토'];
+  let t;
+  if (r.freq === 'weekly') t = `매주 ${(r.days.length ? r.days : [s.getDay()]).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(d => W[d]).join('·')}요일`;
+  else if (r.freq === 'monthly') { const n = nthOf(s); t = r.monthMode === 'nth' ? `매월 ${NTH[n === -1 ? 4 : n - 1]} 주 ${W[s.getDay()]}요일` : `매월 ${s.getDate()}일`; }
+  else t = `매년 ${s.getMonth() + 1}월 ${s.getDate()}일`;
+  return t + (r.until ? ` · ${r.until.slice(2).replaceAll('-', '.')}까지` : '');
+}
+// Every occurrence of `ev` that overlaps [from, to] (date strings). One-off events pass through.
+export function occurrences(ev, from, to) {
+  if (!ev.recur) return ev.endDate < from || ev.startDate > to ? [] : [ev];
+  const r = ev.recur, start = parse(ev.startDate);
+  const dur = Math.round((parse(ev.endDate) - start) / 864e5);
+  const lo = ymd(addDays(parse(from), -dur)), hi = r.until && r.until < to ? r.until : to;
+  if (hi < ev.startDate) return [];
+  const out = [];
+  const take = d => {
+    if (!d) return;
+    const s = ymd(d);
+    if (s < ev.startDate || s < lo || s > hi || r.exdates.includes(s)) return;
+    out.push({ ...ev, id: `${ev.id}@${s}`, seriesId: ev.id, occDate: s, startDate: s, endDate: ymd(addDays(d, dur)) });
+  };
+  const begin = lo > ev.startDate ? parse(lo) : start;
+  if (r.freq === 'weekly') {
+    const days = r.days.length ? r.days : [start.getDay()];
+    for (let w = weekStart(begin), n = 0; ymd(w) <= hi && n < 600; w = addDays(w, 7), n++) days.forEach(d => take(addDays(w, (d + 6) % 7)));
+  } else if (r.freq === 'monthly') {
+    const n0 = nthOf(start);
+    for (let y = begin.getFullYear(), m = begin.getMonth(), n = 0; n < 240; n++, m++) {
+      if (m > 11) { m = 0; y++; }
+      if (ymd(new Date(y, m, 1)) > hi) break;
+      if (r.monthMode === 'nth') take(nthWeekday(y, m, start.getDay(), n0));
+      else { const d = new Date(y, m, start.getDate()); if (d.getMonth() === m) take(d); }
+    }
+  } else {
+    for (let y = begin.getFullYear(); y <= +hi.slice(0, 4); y++) { const d = new Date(y, start.getMonth(), start.getDate()); if (d.getMonth() === start.getMonth()) take(d); }
+  }
+  return out.sort((a, b) => a.startDate.localeCompare(b.startDate));
+}
+
+// Promotions copied from the work hub (read-only here).
+export const normPromo = (id, d = {}) => ({
+  id, title: str(d.title || '프로모션', 160),
+  startDate: okDate(d.startDate) ? d.startDate : ymd(today()),
+  endDate: okDate(d.endDate) ? d.endDate : (okDate(d.startDate) ? d.startDate : ymd(today())),
+  channel: ['online', 'offline', 'both'].includes(d.channel) ? d.channel : 'both',
+  status: str(d.status, 20), memo: str(d.memo, 2000), promo: true,
+});
+export const channelLabel = c => ({ online: '온라인', offline: '오프라인', both: '온·오프' }[c] || '');
+
 export const normMemo = (id, d = {}) => ({ id, title: str(d.title || '메모', 80), projectId: optId(d.projectId), archived: !!d.archived, createdAt: iso(d.createdAt), updatedAt: iso(d.updatedAt || d.createdAt) });
 export const normEntry = (id, d = {}) => ({ id, memoId: optId(d.memoId), body: str(d.body, 4000), createdAt: iso(d.createdAt), sentTo: optId(d.sentTo) });
 export function normRecap(id, d = {}) {
@@ -69,6 +148,9 @@ export function normRecap(id, d = {}) {
     due: okDate(p.due) ? p.due : null,
     lead: Math.max(0, Math.min(365, Math.round(Number(p.lead) || 0))),
     startDate: okDate(p.startDate || p.start_date) ? (p.startDate || p.start_date) : null,
+    endDate: okDate(p.endDate || p.end_date) ? (p.endDate || p.end_date) : null,
+    groupId: optId(p.groupId || p.group_id),
+    groupName: str(p.groupName || p.group_name, 60),
     startTime: timeOf(p.startTime || p.start_time),
     endTime: timeOf(p.endTime || p.end_time),
     location: str(p.location, 200),

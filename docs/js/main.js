@@ -1,18 +1,21 @@
-import { $, $$, showBanner, hideBanner } from './ui.js';
+import { $, $$, el, btn, showBanner, hideBanner } from './ui.js';
 import { CLOUD, sb, state, onChange, startLocal, startSession, stopSession, refresh, flush, pendingCount } from './store.js';
-import './db.js';
-import { setNavigator, openAdd } from './editors.js';
-import { renderHome, wireHome, rollWeekIfNeeded } from './views/home.js';
+import { tasks, activeProjects } from './db.js';
+import { setNavigator, openAdd, openProject } from './editors.js';
+import { renderDashboard, setDashNav } from './views/dashboard.js';
+import { renderWeek, wireWeek, rollWeekIfNeeded } from './views/week.js';
 import { renderCalendar, wireCalendar } from './views/calendar.js';
-import { renderProjects, wireProjects } from './views/projects.js';
+import { renderProjects, wireProjects, projState, openProjectPage } from './views/projects.js';
 import { renderMemos, wireMemos, memoState, newMemo } from './views/memos.js';
 import { openSettings } from './views/settings.js';
 
-const VIEWS = ['home', 'calendar', 'projects', 'memos'];
+const VIEWS = ['home', 'week', 'calendar', 'projects', 'memos'];
 let view = 'home';
 
 function setView(v, opts = {}) {
   view = VIEWS.includes(v) ? v : 'home';
+  if (view === 'projects') projState.pid = opts.project !== undefined ? opts.project : (opts.keep ? projState.pid : null);
+  if (view === 'memos' && opts.memo) { memoState.id = opts.memo; memoState.pane = true; }
   history.replaceState(null, '', '#' + view);
   if (view === 'memos' && opts.newMemo) { render(); newMemo(); return; }
   render();
@@ -21,25 +24,44 @@ function setView(v, opts = {}) {
 
 function render() {
   if ($('#main').hidden) return;
-  $$('[data-view]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.view === view)));
+  $$('[data-view]').forEach(b => b.setAttribute('aria-current', String(b.dataset.view === view && !(view === 'projects' && b.classList.contains('side-sec-title') && projState.pid))));
   VIEWS.forEach(v => { $('#view-' + v).hidden = v !== view; });
   document.body.dataset.view = view;
-  if (view === 'home') renderHome();
+  renderSideProjects();
+  if (view === 'home') renderDashboard();
+  else if (view === 'week') renderWeek();
   else if (view === 'calendar') renderCalendar();
   else if (view === 'projects') renderProjects();
   else renderMemos();
   updateSync();
 }
 
+function renderSideProjects() {
+  const box = $('#sideProjects'); box.textContent = '';
+  const item = (id, label, color, n) => {
+    const b = btn('side-proj' + (view === 'projects' && projState.pid === id ? ' on' : ''), '', () => setView('projects', { project: id }));
+    if (color) b.append(el('span', 'dot c-' + color)); else b.append(el('span', 'dot all'));
+    b.append(el('span', 'side-proj-name', label));
+    if (n) b.append(el('span', 'side-count', String(n)));
+    box.append(b);
+  };
+  activeProjects().forEach(p => item(p.id, p.name, p.color, tasks.all().filter(t => t.projectId === p.id && !t.done).length));
+  item('all', '전체 업무', null, 0);
+}
+
 function updateSync() {
-  const dot = $('#syncDot'), note = $('#syncNote');
-  if (!CLOUD) { dot.className = 'sync-dot'; note.textContent = '이 기기에만 저장됩니다'; return; }
-  if (!state.uid) return;
-  const n = pendingCount();
-  if (state.syncError) { dot.className = 'sync-dot err'; note.textContent = `동기화 오류 · 변경 ${n}건 대기`; }
-  else if (!navigator.onLine) { dot.className = 'sync-dot wait'; note.textContent = n ? `오프라인 · 변경 ${n}건은 연결되면 저장` : '오프라인 · 저장된 내용 표시 중'; }
-  else if (n || state.flushing) { dot.className = 'sync-dot wait'; note.textContent = '저장 중…'; }
-  else { dot.className = 'sync-dot ok'; note.textContent = '동기화됨'; }
+  let cls = 'sync-dot', text;
+  if (!CLOUD) text = '이 기기에만 저장됩니다';
+  else if (!state.uid) return;
+  else {
+    const n = pendingCount();
+    if (state.syncError) { cls += ' err'; text = `동기화 오류 · 변경 ${n}건 대기`; }
+    else if (!navigator.onLine) { cls += ' wait'; text = n ? `오프라인 · 변경 ${n}건 대기` : '오프라인'; }
+    else if (n || state.flushing) { cls += ' wait'; text = '저장 중…'; }
+    else { cls += ' ok'; text = '동기화됨'; }
+  }
+  $$('.js-sync-dot').forEach(d => { d.className = cls + ' js-sync-dot'; });
+  $$('.js-sync-note').forEach(n => { n.textContent = text; });
   if (state.syncError) showBanner(`서버에 저장하지 못했습니다: ${state.syncError}. 연결이 돌아오면 다시 시도합니다.`, true, 'sync');
   else hideBanner('sync');
 }
@@ -77,12 +99,13 @@ const showMain = () => { $('#auth').hidden = true; $('#main').hidden = false; };
 // ---------- boot ----------
 function wire() {
   $$('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
-  $('#addBtn').addEventListener('click', () => openAdd());
-  $('#setBtn').addEventListener('click', openSettings);
+  $$('.js-add').forEach(b => b.addEventListener('click', () => openAdd()));
+  $$('.js-settings').forEach(b => b.addEventListener('click', openSettings));
+  $('#sideNewProject').addEventListener('click', () => openProject(null, p => { if (p) setView('projects', { project: p.id }); }));
   $('#authForm').addEventListener('submit', e => { e.preventDefault(); onAuth('login'); });
   $('#authSignup').addEventListener('click', () => onAuth('signup'));
-  wireHome(); wireCalendar(); wireProjects(); wireMemos();
-  setNavigator(setView);
+  wireWeek(); wireCalendar(); wireProjects(); wireMemos();
+  setNavigator(setView); setDashNav(setView);
   onChange(render);
   window.addEventListener('planner:render', render);
   document.addEventListener('visibilitychange', () => {
@@ -94,7 +117,7 @@ function wire() {
 
 function boot() {
   const h = (location.hash || '').slice(1);
-  if (h === 'week') view = 'home'; else if (VIEWS.includes(h)) view = h;
+  if (VIEWS.includes(h)) view = h;
   wire();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (!CLOUD) { showMain(); startLocal(); return; }
@@ -109,4 +132,4 @@ function boot() {
 }
 
 boot();
-export { memoState };
+export { openProjectPage };

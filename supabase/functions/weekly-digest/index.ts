@@ -3,10 +3,11 @@
 //   - by pg_cron every Monday with the x-cron-secret header → everyone with a subscription
 //   - by the app's "테스트 알림" button with the signed-in user's token → only that person
 // Deploy with --no-verify-jwt; this function checks the caller itself.
-import { CORS, json, adminClient, caller, sendPush, type Sub, DAY, parseDate, seoulToday, weekStart, md } from '../_shared/push.ts';
+import { CORS, json, adminClient, caller, sendPush, type Sub, DAY, parseDate, fmtDate, seoulToday, weekStart, md } from '../_shared/push.ts';
+import { occurrenceStarts, type Recur } from '../_shared/recur.ts';
 
 type Task = { id: string; user_id: string; title: string; due: string | null; lead: number; repeat: boolean; done: boolean; created: string };
-type Ev = { user_id: string; title: string; start_date: string; end_date: string; start_time: string | null };
+type Ev = { user_id: string; title: string; start_date: string; end_date: string; start_time: string | null; recur: Recur | null };
 
 // Same rule as weekRole() in docs/js/model.js, for open items only.
 function role(t: Task, W: number): 'overdue' | 'due' | 'ahead' | 'nodue' | null {
@@ -62,15 +63,17 @@ Deno.serve(async req => {
   const W = weekStart(seoulToday());
   const [{ data: tasks, error: taskErr }, { data: evs, error: evErr }] = await Promise.all([
     admin.from('tasks').select('id,user_id,title,due,lead,repeat,done,created').in('user_id', userIds).eq('done', false),
-    admin.from('events').select('user_id,title,start_date,end_date,start_time').in('user_id', userIds)
-      .lte('start_date', new Date(W + 6 * DAY).toISOString().slice(0, 10)).gte('end_date', new Date(W).toISOString().slice(0, 10)),
+    admin.from('events').select('user_id,title,start_date,end_date,start_time,recur').in('user_id', userIds)
+      .lte('start_date', fmtDate(W + 6 * DAY)).or(`end_date.gte.${fmtDate(W)},recur.not.is.null`),
   ]);
   if (taskErr || evErr) return json({ error: (taskErr || evErr)!.message }, 500);
 
   let sent = 0, removed = 0;
   const failures: string[] = [];
   for (const uid of userIds) {
-    const s = summarize((tasks as Task[]).filter(t => t.user_id === uid), (evs as Ev[]).filter(e => e.user_id === uid));
+    // One entry per occurrence this week (repeating events count each time they happen).
+    const weekEvs = (evs as Ev[]).filter(e => e.user_id === uid).flatMap(e => occurrenceStarts(e, fmtDate(W), fmtDate(W + 6 * DAY)).map(() => e));
+    const s = summarize((tasks as Task[]).filter(t => t.user_id === uid), weekEvs);
     if (!s.total && who.cron) continue; // nothing to nag about on a quiet week
     const r = await sendPush(admin, (subs as Sub[]).filter(x => x.user_id === uid), { title: s.title, body: s.body, url: './#home', tag: 'weekly-digest' });
     sent += r.sent; removed += r.removed; failures.push(...r.failures);
