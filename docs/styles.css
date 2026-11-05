@@ -744,3 +744,108 @@ input[type=date], input[type=time] { min-width: 0; max-width: 100%; box-sizing: 
 .mtitle > :not(.mtitle-btn) { flex: none; }
 /* board cards keep up to two lines */
 .card-title { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---------- memo: rounded, airy composer (card with a soft two-tone outline) ---------- */
+:root { --glow-a: #3fd0e8; --glow-b: #a98bf5; }
+.memo-pane { border-radius: 18px; padding: 16px; gap: 12px; }
+.memo-stream { border-top: 0; }
+.composer {
+  display: grid; gap: 6px; align-items: stretch;
+  border: 1.5px solid transparent; border-radius: 18px; padding: 12px 12px 10px 16px;
+  background: linear-gradient(var(--surface), var(--surface)) padding-box,
+              linear-gradient(120deg, var(--glow-a), var(--glow-b)) border-box;
+  box-shadow: 0 6px 22px -8px color-mix(in srgb, var(--glow-b) 45%, transparent), 0 2px 10px -6px color-mix(in srgb, var(--glow-a) 50%, transparent);
+  transition: box-shadow .2s ease;
+}
+.composer:focus-within { box-shadow: 0 8px 28px -8px color-mix(in srgb, var(--glow-b) 60%, transparent), 0 2px 14px -4px color-mix(in srgb, var(--glow-a) 55%, transparent); }
+.composer textarea {
+  border: 0; background: transparent; border-radius: 0; padding: 2px 0; min-height: 52px; max-height: 220px;
+  line-height: 1.6; color: var(--ink); outline: none; box-shadow: none;
+}
+.composer textarea:focus { outline: none; box-shadow: none; }
+.composer-bar { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.composer-tool {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--ink);
+  font-size: .86rem; font-weight: 500; padding: 6px 10px 6px 6px; border-radius: 999px; margin-left: -6px;
+}
+.composer-tool:hover { background: var(--bg); }
+.composer-tool svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.send-btn {
+  width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: var(--accent); color: var(--accent-ink); transition: background .15s ease, transform .1s ease;
+}
+.send-btn:disabled { background: color-mix(in srgb, var(--muted) 22%, var(--surface)); color: var(--muted); opacity: 1; cursor: default; }
+.send-btn:not(:disabled):active { transform: scale(.94); }
+.send-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.recap-hint { padding: 0 6px; font-size: .78rem; }
+
+/* rounded controls around the memo */
+#memoNew { border-radius: 999px; padding: 9px 16px; }
+.memo-items { gap: 6px; }
+.memo-item { border-radius: 14px; padding: 10px 14px; transition: background .12s ease, border-color .12s ease; }
+.memo-item:hover { background: var(--bg); }
+.memo-item.on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.memo-item.on .mi-meta { color: color-mix(in srgb, var(--surface) 70%, transparent); }
+.memo-title { border-radius: 999px; padding: 5px 12px; }
+.memo-head select { border-radius: 999px; padding: 6px 12px; }
+.memo-head .linkbtn.danger { border-radius: 999px; padding: 5px 12px; }
+.memo-head .linkbtn.danger:hover { background: color-mix(in srgb, var(--late) 10%, transparent); }
+.day-sep { border: 1px solid var(--line); background: var(--surface); }
+.entry { border-radius: 12px; padding: 7px 8px; }
+.entry-acts .linkbtn { border: 1px solid var(--line); border-radius: 999px; padding: 2px 11px; color: var(--ink); background: var(--surface); font-size: .78rem; }
+.entry-acts .linkbtn:hover { border-color: var(--ink); }
+.recap { border-radius: 16px; }
+.memo-items { overflow-x: hidden; }
+.memo-item { min-width: 0; }
+.memo-item .mi-top, .memo-item .mi-meta { min-width: 0; }
+.recap .btn, .memo-pane .btn { border-radius: 999px; padding: 7px 16px; }
+.recap .prop, .recap input, .recap select { border-radius: 10px; }
+
+/* ---------- recap v2: sectioned write-up + compact proposals that open on demand ---------- */
+.chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 3px 11px; font-size: .78rem; font-weight: 500; white-space: nowrap; }
+.chip:hover { border-color: var(--ink); }
+.chip.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.recap { gap: 8px; padding: 12px 14px; }
+.recap-body { display: grid; gap: 4px; font-size: .86rem; line-height: 1.6; }
+.rb-h { margin: 8px 0 0; font-size: .86rem; font-weight: 700; color: var(--ink); }
+.rb-h:first-child { margin-top: 2px; }
+.rb-sh { margin: 4px 0 0; font-size: .8rem; font-weight: 600; color: var(--tag-amber); }
+.rb-p { margin: 0; }
+.rb-list, .rb-sub { margin: 0; padding-left: 18px; display: grid; gap: 1px; }
+.rb-list > li::marker { color: var(--muted); }
+.rb-sub { padding-left: 16px; list-style: circle; color: color-mix(in srgb, var(--ink) 85%, var(--muted)); }
+.recap-share { display: flex; justify-content: flex-end; }
+.props-h { margin-top: 6px; }
+.props { gap: 6px; }
+.prop { grid-template-columns: 16px minmax(0, 1fr); gap: 4px 8px; padding: 7px 10px; border-radius: 12px; align-items: center; }
+.prop input[type=checkbox] { margin: 0; width: 15px; height: 15px; }
+.prop > .pill { margin-top: 0; }
+.prop-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.prop-head .pill { flex: none; font-size: .7rem; }
+.prop-text { flex: 1; min-width: 0; display: grid; }
+.prop-name { font-size: .86rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prop-meta { font-size: .74rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prop-state { flex: none; font-size: .74rem; color: var(--muted); font-weight: 600; }
+.prop-state.ok { color: var(--ok); }
+.prop-toggle { flex: none; }
+.prop-toggle[aria-expanded="true"] { background: var(--bg); }
+.prop-fields { grid-column: 2 / -1; gap: 6px; padding-top: 6px; border-top: 1px dashed var(--line); margin-top: 2px; }
+.prop-fields[hidden] { display: none; }
+.prop-title { font-size: .84rem; padding: 4px 8px; border-radius: 8px; }
+.prop-field { font-size: 10.5px; }
+.prop-line { gap: 6px; }
+.prop-line input, .prop-line select { font-size: .8rem; padding: 3px 7px; border-radius: 8px; height: 28px; }
+.prop-hint, .prop-note { font-size: .72rem; }
+.prop-acts { display: flex; justify-content: flex-end; }
+.recap .ed-actions .btn { padding: 5px 14px; font-size: .82rem; }
+@media (max-width: 640px) {
+  .prop { grid-template-columns: 16px minmax(0, 1fr); }
+  .prop-fields { grid-column: 1 / -1; zoom: .86; } /* inputs stay 16px for iOS (no auto zoom) but render smaller */
+  .prop-line { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .prop-line input, .prop-line select { height: 34px; }
+  .recap-body { font-size: .84rem; }
+}
+
+/* mobile top bar: + as an icon button the size of the settings button */
+.mtop .js-add.iconbtn { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.mtop .js-add.iconbtn svg { stroke: var(--accent-ink); stroke-width: 2.2; }

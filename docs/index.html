@@ -72,7 +72,7 @@
         <h1>주간 체크 플래너</h1>
         <p><span class="sync-dot js-sync-dot"></span><span class="js-sync-note">불러오는 중…</span></p>
       </div>
-      <button class="btn primary js-add" type="button">+ 추가</button>
+      <button class="iconbtn js-add" type="button" aria-label="추가" title="추가"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
       <button class="iconbtn js-settings" type="button" aria-label="설정">
         <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
       </button>
@@ -157,8 +157,12 @@
           <div id="memoRecaps" class="memo-recaps"></div>
           <div id="memoStream" class="memo-stream" aria-live="polite"></div>
           <div class="composer">
-            <textarea id="memoInput" rows="1" aria-label="메모 입력 (엔터로 보내기, Shift+엔터로 줄바꿈)"></textarea>
-            <button class="btn primary send-btn" id="memoSend" type="button" aria-label="보내기" title="보내기 (엔터)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5v7a3 3 0 0 1-3 3H6"/><path d="M10 11l-4 4 4 4"/></svg></button>
+            <textarea id="memoInput" rows="2" aria-label="메모 입력 (엔터로 보내기, Shift+엔터로 줄바꿈)"></textarea>
+            <div class="composer-bar">
+              <button class="composer-tool" id="memoRecapCopy" type="button" title="Claude 데스크톱에 붙여 넣을 리캡 요청 문구를 복사합니다"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>리캡 문구 복사</span></button>
+              <span class="spacer"></span>
+              <button class="send-btn" id="memoSend" type="button" aria-label="보내기" title="보내기 (엔터)" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+            </div>
           </div>
           <div class="recap-hint" id="recapHint"></div>
         </section>

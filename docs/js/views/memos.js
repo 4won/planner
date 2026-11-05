@@ -86,7 +86,8 @@ export function renderMemos() {
   const hint = $('#recapHint');
   hint.textContent = '';
   const phrase = `‘${m.title}’ 메모 리캡해줘`;
-  hint.append(el('span', null, `리캡이 필요하면 Claude 데스크톱에서 “${phrase}”라고 말하세요.`), btn('linkbtn', '문구 복사', ev => copyText(phrase, ev.currentTarget)));
+  hint.append(el('span', null, `리캡이 필요하면 Claude 데스크톱에서 “${phrase}”라고 말하세요.`));
+  $('#memoRecapCopy').onclick = ev => copyText(phrase, ev.currentTarget.querySelector('span'));
 }
 
 function entryEl(e, m) {
@@ -125,6 +126,64 @@ function suggestProject(p) {
   return hit ? hit.id : '';
 }
 
+// Recap text is light markdown: "## 섹션", "### 소제목", "- 항목", "  - 하위 항목", "**강조**".
+function recapBody(text) {
+  const box = el('div', 'recap-body');
+  let list = null, sub = null;
+  const inline = (parent, s) => {
+    s.split(/(\*\*[^*]+\*\*)/).forEach(part => {
+      if (/^\*\*[^*]+\*\*$/.test(part)) parent.append(el('b', null, part.slice(2, -2)));
+      else if (part) parent.append(document.createTextNode(part));
+    });
+    return parent;
+  };
+  text.split('\n').forEach(raw => {
+    const line = raw.replace(/\s+$/, '');
+    if (!line.trim()) { list = sub = null; return; }
+    let m;
+    if ((m = /^#{1,2}\s+(.*)$/.exec(line))) { list = sub = null; box.append(inline(el('h4', 'rb-h'), m[1])); return; }
+    if ((m = /^#{3,}\s+(.*)$/.exec(line))) { list = sub = null; box.append(inline(el('h5', 'rb-sh'), m[1])); return; }
+    if ((m = /^(\s{2,}|\t+)[-*·]\s+(.*)$/.exec(line))) {
+      if (!list) { list = el('ul', 'rb-list'); box.append(list); }
+      if (!sub) { sub = el('ul', 'rb-sub'); (list.lastElementChild || list).append(sub); }
+      sub.append(inline(el('li'), m[2])); return;
+    }
+    if ((m = /^[-*·]\s+(.*)$/.exec(line))) {
+      if (!list) { list = el('ul', 'rb-list'); box.append(list); }
+      sub = null; list.append(inline(el('li'), m[1])); return;
+    }
+    list = sub = null;
+    box.append(inline(el('p', 'rb-p'), line));
+  });
+  return box;
+}
+// Plain text for pasting into a messenger or mail to the people at the meeting.
+function recapShareText(r, m) {
+  const body = r.summary.split('\n').map(l => l
+    .replace(/^#{1,2}\s+/, '■ ')
+    .replace(/^#{3,}\s+/, '  ▶ ')
+    .replace(/^(\s{2,}|\t+)[-*·]\s+/, '      · ')
+    .replace(/^[-*·]\s+/, '  - ')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')).join('\n').replace(/\n■/g, '\n\n■').replace(/\n{3,}/g, '\n\n');
+  return `[${m.title}] 회의 리캡\n\n${body.trim()}\n`;
+}
+
+function propMeta(p, d) {
+  const bits = [];
+  if (p.kind === 'event') {
+    if (d.due) bits.push(md(parse(d.due)) + (d.endDate && d.endDate !== d.due ? `~${md(parse(d.endDate))}` : ''));
+    if (d.startTime) bits.push(d.startTime + (d.endTime ? `–${d.endTime}` : ''));
+    else if (d.due) bits.push('종일');
+    if (p.location) bits.push(p.location);
+  } else {
+    bits.push(d.due ? `마감 ${md(parse(d.due))}` : '마감 없음');
+    if (d.tags) bits.push(d.tags);
+  }
+  const pn = d.projectId ? (projects.get(d.projectId) || {}).name : p.projectName;
+  if (pn) bits.push(pn);
+  return bits.join(' · ') || '날짜 없음';
+}
+
 function recapCard(r, m, expanded) {
   const card = el('details', 'recap'); card.open = expanded || r.proposals.some(p => p.status === 'pending');
   const sum = el('summary');
@@ -132,9 +191,17 @@ function recapCard(r, m, expanded) {
   sum.append(el('span', 'recap-tag', '리캡'), el('span', null, `${md(new Date(r.createdAt))} ${timeOf(r.createdAt)}`));
   if (pending) sum.append(el('span', 'pill recap-pill', `검토할 제안 ${pending}`));
   card.append(sum);
-  if (r.summary) card.append(el('div', 'recap-summary', r.summary));
+  if (r.summary) {
+    card.append(recapBody(r.summary));
+    const share = el('div', 'recap-share');
+    const cp = btn('chip', '참석자 전달용 복사', ev => copyText(recapShareText(r, m), ev.currentTarget));
+    cp.title = '메신저·메일에 바로 붙여 넣을 수 있는 글로 복사합니다';
+    share.append(cp);
+    card.append(share);
+  }
 
   if (r.proposals.length) {
+    card.append(el('h4', 'rb-h props-h', `등록 제안 ${r.proposals.length}건`));
     const list = el('div', 'props');
     let updateCount = () => {};
     r.proposals.forEach(p => {
@@ -142,7 +209,7 @@ function recapCard(r, m, expanded) {
       let d = drafts.get(key);
       if (!d) {
         const projectId = suggestProject(p);
-        d = { checked: p.status === 'pending', title: p.title, due: p.kind === 'event' ? (p.startDate || p.due || '') : (p.due || ''), endDate: p.endDate || '', startTime: p.startTime || '', endTime: p.endTime || '', projectId, tags: tagsText(p.tags) };
+        d = { checked: p.status === 'pending', open: false, title: p.title, due: p.kind === 'event' ? (p.startDate || p.due || '') : (p.due || ''), endDate: p.endDate || '', startTime: p.startTime || '', endTime: p.endTime || '', projectId, tags: tagsText(p.tags) };
         drafts.set(key, d);
       }
       const settled = p.status !== 'pending';
@@ -150,19 +217,33 @@ function recapCard(r, m, expanded) {
       const cb = el('input'); cb.type = 'checkbox'; cb.checked = !settled && d.checked; cb.disabled = settled;
       cb.setAttribute('aria-label', `${p.title} 등록할지 선택`);
       cb.addEventListener('change', () => { d.checked = cb.checked; updateCount(); });
-      row.append(cb, el('span', 'pill kind-' + p.kind, p.kind === 'event' ? '일정' : '업무'));
-      const fields = el('div', 'prop-fields');
-      const ti = el('input', 'prop-title'); ti.type = 'text'; ti.value = d.title; ti.maxLength = 120; ti.disabled = settled; ti.setAttribute('aria-label', '제목');
-      ti.addEventListener('input', () => { d.title = ti.value; });
+      const head = el('div', 'prop-head');
+      const titleEl = el('div', 'prop-name', d.title); titleEl.title = d.title;
+      const meta = el('div', 'prop-meta', propMeta(p, d));
+      const txt = el('div', 'prop-text'); txt.append(titleEl, meta);
+      head.append(el('span', 'pill kind-' + p.kind, p.kind === 'event' ? '일정' : '업무'), txt);
+      if (settled) head.append(el('span', 'prop-state' + (p.status === 'added' ? ' ok' : ''), p.status === 'added' ? '등록됨' : '제외됨'));
+      else {
+        const tog = btn('chip prop-toggle', '');
+        const paintTog = () => { tog.textContent = d.open ? '접기' : (p.kind === 'event' ? '캘린더 등록' : '업무 등록'); tog.setAttribute('aria-expanded', d.open); };
+        tog.addEventListener('click', () => { d.open = !d.open; fields.hidden = !d.open; paintTog(); });
+        paintTog();
+        head.append(tog);
+      }
+      row.append(cb, head);
+
+      const fields = el('div', 'prop-fields'); fields.hidden = settled || !d.open;
+      const refresh = () => { titleEl.textContent = d.title; titleEl.title = d.title; meta.textContent = propMeta(p, d); };
+      const ti = el('input', 'prop-title'); ti.type = 'text'; ti.value = d.title; ti.maxLength = 120; ti.setAttribute('aria-label', '제목');
+      ti.addEventListener('input', () => { d.title = ti.value; refresh(); });
       fields.append(ti);
 
       const line = el('div', 'prop-line');
       const labeled = (text, input) => { const l = el('label', 'prop-field'); l.append(el('span', null, text), input); return l; };
-      const dateIn = (val, aria, onIn) => { const i = el('input'); i.type = 'date'; i.value = val; i.disabled = settled; i.setAttribute('aria-label', aria); i.addEventListener('input', () => onIn(i.value)); return i; };
-      const timeIn = (val, aria, onIn) => { const i = el('input'); i.type = 'time'; i.step = 300; i.value = val; i.disabled = settled; i.setAttribute('aria-label', aria); i.addEventListener('input', () => onIn(i.value)); return i; };
+      const dateIn = (val, aria, onIn) => { const i = el('input'); i.type = 'date'; i.value = val; i.setAttribute('aria-label', aria); i.addEventListener('input', () => { onIn(i.value); refresh(); }); return i; };
+      const timeIn = (val, aria, onIn) => { const i = el('input'); i.type = 'time'; i.step = 300; i.value = val; i.setAttribute('aria-label', aria); i.addEventListener('input', () => { onIn(i.value); refresh(); }); return i; };
       if (p.kind === 'event') {
         const endIn = dateIn(d.endDate, '종료일', v => { d.endDate = v; });
-        endIn.placeholder = '같은 날';
         line.append(
           labeled('시작일', dateIn(d.due, '시작일', v => { d.due = v; if (d.endDate && d.endDate < v) { d.endDate = ''; endIn.value = ''; } endIn.min = v; })),
           labeled('종료일', endIn),
@@ -173,22 +254,23 @@ function recapCard(r, m, expanded) {
       } else {
         line.append(labeled('마감', dateIn(d.due, '마감일', v => { d.due = v; })));
       }
-      const ps = el('select'); ps.disabled = settled; ps.setAttribute('aria-label', '프로젝트');
-      ps.append(option('', p.projectName && !d.projectId ? `프로젝트 없음 (제안: ${p.projectName})` : '프로젝트 없음', !d.projectId));
+      const ps = el('select'); ps.setAttribute('aria-label', '프로젝트');
+      ps.append(option('', p.projectName && !d.projectId ? `없음 (제안: ${p.projectName})` : '프로젝트 없음', !d.projectId));
       activeProjects().forEach(x => ps.append(option(x.id, x.name, x.id === d.projectId)));
+      ps.addEventListener('change', () => { d.projectId = ps.value; refresh(); });
       line.append(labeled('프로젝트', ps));
       if (p.kind === 'task') {
-        const tg = el('input'); tg.type = 'text'; tg.value = d.tags; tg.placeholder = '#VMD #촬영'; tg.disabled = settled; tg.setAttribute('aria-label', '해시태그');
-        tg.addEventListener('input', () => { d.tags = tg.value; });
-        ps.addEventListener('change', () => { d.projectId = ps.value; });
+        const tg = el('input'); tg.type = 'text'; tg.value = d.tags; tg.placeholder = '#VMD #촬영'; tg.setAttribute('aria-label', '해시태그');
+        tg.addEventListener('input', () => { d.tags = tg.value; refresh(); });
         const tf = labeled('해시태그', tg); tf.classList.add('wide');
         line.append(tf);
-      } else ps.addEventListener('change', () => { d.projectId = ps.value; });
+      }
       fields.append(line);
       if (p.kind === 'event') fields.append(el('div', 'prop-hint', '종료일을 비워 두면 시작일 하루 일정으로 등록됩니다.'));
       if (p.note) fields.append(el('div', 'prop-note', p.note));
-      if (p.status === 'added') fields.append(el('div', 'prop-note ok', '등록됨'));
-      if (p.status === 'dismissed') fields.append(el('div', 'prop-note', '제외됨'));
+      const one = el('div', 'prop-acts');
+      one.append(btn('chip primary', p.kind === 'event' ? '이 일정 등록' : '이 업무 등록', () => register(r, m, p.id)));
+      fields.append(one);
       row.append(fields);
       list.append(row);
     });
@@ -210,11 +292,11 @@ function recapCard(r, m, expanded) {
   return card;
 }
 
-function register(r, m) {
+function register(r, m, onlyId) {
   let n = 0;
   const proposals = r.proposals.map(p => {
     const d = drafts.get(`${r.id}:${p.id}`);
-    if (p.status !== 'pending' || !d || !d.checked || !d.title.trim()) return p;
+    if (p.status !== 'pending' || !d || !d.title.trim() || (onlyId ? p.id !== onlyId : !d.checked)) return p;
     n++;
     const memo = [p.note, `메모: ${m.title}`].filter(Boolean).join('\n');
     if (p.kind === 'event') {
@@ -239,7 +321,8 @@ export function wireMemos() {
   $('#memoTitle').addEventListener('change', e => { const m = memos.get(memoState.id); const v = e.target.value.trim(); if (m && v && v !== m.title) memos.put({ ...m, title: v }); });
   $('#memoProject').addEventListener('change', e => { const m = memos.get(memoState.id); if (m) memos.put({ ...m, projectId: e.target.value || null }); });
   const input = $('#memoInput');
-  const grow = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 180) + 'px'; };
+  const sendBtn = $('#memoSend');
+  const grow = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 220) + 'px'; sendBtn.disabled = !input.value.trim(); };
   input.addEventListener('input', grow);
   const send = () => {
     const m = memos.get(memoState.id); const body = input.value.trim();
