@@ -4,15 +4,16 @@
 // Week: an all-day lane strip plus an hourly time grid with a "now" line.
 // Phones: tap a day to see its list under the month grid.
 import { $, el, btn } from '../ui.js';
-import { ymd, parse, addDays, today, weekStart, daysBetween, pad, md, mdLong, DOW } from '../dates.js';
+import { ymd, parse, addDays, today, sunStart, daysBetween, pad, md, mdLong, DOW } from '../dates.js';
 import { eventTimeText } from '../model.js';
+import { holidayOf } from '../holidays.js';
 import { tasks, allEvents, promosIn } from '../db.js';
 import { state } from '../store.js';
 import { openTask, openEvent, openDay, openPromo, promoColor } from '../editors.js';
 import { taskRow, eventRow } from './common.js';
 
 const lsGet = (k, f) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; } catch (e) { return f; } };
-export const calState = { month: new Date(today().getFullYear(), today().getMonth(), 1), week: weekStart(today()), view: lsGet('wcp:calview', 'month'), selected: ymd(today()), filters: { todo: true, event: true, promo: false, ...lsGet('wcp:calfilters', {}) } };
+export const calState = { month: new Date(today().getFullYear(), today().getMonth(), 1), week: sunStart(today()), view: lsGet('wcp:calview', 'month'), selected: ymd(today()), filters: { todo: true, event: true, promo: false, ...lsGet('wcp:calfilters', {}) } };
 const rerender = () => window.dispatchEvent(new Event('planner:render'));
 const phone = () => matchMedia('(max-width: 640px)').matches;
 const HOUR = 44; // px per hour in week view
@@ -51,12 +52,12 @@ export function renderCalendar() {
 function month(host) {
   const M = calState.month, m = M.getMonth();
   const first = new Date(M.getFullYear(), m, 1), last = new Date(M.getFullYear(), m + 1, 0);
-  const start = weekStart(first), weeks = Math.ceil((daysBetween(start, last) + 1) / 7);
+  const start = sunStart(first), weeks = Math.ceil((daysBetween(start, last) + 1) / 7);
   const tStr = ymd(today());
   const maxLanes = phone() ? 3 : 4;
 
   const dow = el('div', 'mcal-dow');
-  ['월', '화', '수', '목', '금', '토', '일'].forEach((d, i) => dow.append(el('span', i === 5 ? 'sat' : i === 6 ? 'sun' : '', d)));
+  ['일', '월', '화', '수', '목', '금', '토'].forEach((d, i) => dow.append(el('span', i === 6 ? 'sat' : i === 0 ? 'sun' : '', d)));
   host.append(dow);
 
   for (let w = 0; w < weeks; w++) {
@@ -67,14 +68,16 @@ function month(host) {
     const dayStrs = [];
     for (let i = 0; i < 7; i++) {
       const d = addDays(ws, i), ds = ymd(d); dayStrs.push(ds);
-      const cell = el('div', 'mday' + (d.getMonth() !== m ? ' out' : '') + (ds === tStr ? ' today' : '') + (ds === calState.selected && phone() ? ' sel' : '') + (i >= 5 ? ' wkend' : ''));
+      const cell = el('div', 'mday' + (d.getMonth() !== m ? ' out' : '') + (ds === tStr ? ' today' : '') + (ds === calState.selected && phone() ? ' sel' : '') + (i === 0 || i === 6 ? ' wkend' : ''));
       cell.style.gridColumn = `${i + 1}`;
       cell.addEventListener('click', () => { if (phone()) { calState.selected = ds; rerender(); } else openDay(ds); });
       cell.addEventListener('dblclick', () => openEvent(null, { startDate: ds, endDate: ds }));
       row.append(cell);
-      const num = el('span', 'mnum' + (i === 5 ? ' sat' : i === 6 ? ' sun' : ''), d.getDate() === 1 ? `${d.getMonth() + 1}월 1일` : String(d.getDate()));
+      const hol = holidayOf(ds);
+      const num = el('span', 'mnum' + (hol || i === 0 ? ' sun' : i === 6 ? ' sat' : ''), d.getDate() === 1 ? `${d.getMonth() + 1}월 1일` : String(d.getDate()));
       num.style.gridColumn = `${i + 1}`;
       row.append(num);
+      if (hol) { const hl = el('span', 'mhol' + (d.getMonth() !== m ? ' dim' : ''), hol); hl.style.gridColumn = `${i + 1}`; hl.title = hol; row.append(hl); cell.title = hol; }
     }
     // lane layout
     const items = itemsIn(wsS, weS).map(it => {
@@ -130,7 +133,7 @@ function chip(it, lane, ws) {
 function dayList(host, ds) {
   const d = parse(ds);
   const head = el('div', 'daylist-head');
-  head.append(el('h3', null, `${mdLong(d)}${ds === ymd(today()) ? ' · 오늘' : ''}`), el('span', 'spacer'),
+  head.append(el('h3', null, `${mdLong(d)}${ds === ymd(today()) ? ' · 오늘' : ''}${holidayOf(ds) ? ` · ${holidayOf(ds)}` : ''}`), el('span', 'spacer'),
     btn('linkbtn', '+ 일정', () => openEvent(null, { startDate: ds, endDate: ds })), btn('linkbtn', '+ 업무', () => openTask(null, { due: ds })));
   host.append(head);
   const g = el('div', 'group');
@@ -151,8 +154,10 @@ function week(host) {
   const head = el('div', 'wc-head');
   head.append(el('span', 'wc-gutter'));
   days.forEach((d, i) => {
-    const h = btn('wc-day' + (dayStrs[i] === tStr ? ' today' : '') + (i >= 5 ? ' wkend' : ''), '', () => openDay(dayStrs[i]));
-    h.append(el('span', 'wc-dow', DOW[d.getDay()]), el('span', 'wc-num', String(d.getDate())));
+    const hol = holidayOf(dayStrs[i]);
+    const h = btn('wc-day' + (dayStrs[i] === tStr ? ' today' : '') + (i === 0 || i === 6 ? ' wkend' : '') + (hol || i === 0 ? ' sun' : i === 6 ? ' sat' : ''), '', () => openDay(dayStrs[i]));
+    h.append(el('span', 'wc-dow', hol ? `${DOW[d.getDay()]} · ${hol}` : DOW[d.getDay()]), el('span', 'wc-num', String(d.getDate())));
+    if (hol) h.title = hol;
     head.append(h);
   });
   host.append(head);
@@ -182,7 +187,7 @@ function week(host) {
   for (let h = 0; h < 24; h++) gut.append(el('span', null, h ? `${h < 12 ? '오전' : '오후'} ${((h + 11) % 12) + 1}시` : ''));
   grid.append(gut);
   days.forEach((d, i) => {
-    const col = el('div', 'wc-col' + (dayStrs[i] === tStr ? ' today' : '') + (i >= 5 ? ' wkend' : ''));
+    const col = el('div', 'wc-col' + (dayStrs[i] === tStr ? ' today' : '') + (i === 0 || i === 6 ? ' wkend' : ''));
     col.addEventListener('click', e => {
       if (e.target !== col) return;
       const y = e.offsetY, hh = Math.min(23, Math.floor(y / HOUR)), mm = (y % HOUR) < HOUR / 2 ? '00' : '30';
@@ -229,7 +234,7 @@ export function wireCalendar() {
   };
   $('#mPrev').addEventListener('click', () => go(-1));
   $('#mNext').addEventListener('click', () => go(1));
-  $('#mToday').addEventListener('click', () => { calState.month = new Date(today().getFullYear(), today().getMonth(), 1); calState.week = weekStart(today()); calState.selected = ymd(today()); rerender(); });
+  $('#mToday').addEventListener('click', () => { calState.month = new Date(today().getFullYear(), today().getMonth(), 1); calState.week = sunStart(today()); calState.selected = ymd(today()); rerender(); });
   document.querySelectorAll('[data-cf]').forEach(c => {
     c.checked = !!calState.filters[c.dataset.cf];
     c.addEventListener('change', () => {
@@ -242,7 +247,7 @@ export function wireCalendar() {
     calState.view = b.dataset.calview;
     try { localStorage.setItem('wcp:calview', JSON.stringify(calState.view)); } catch (e) {}
     // Keep the period in view when switching.
-    if (calState.view === 'week') { const t = today(); calState.week = weekStart(t.getMonth() === calState.month.getMonth() ? t : calState.month); }
+    if (calState.view === 'week') { const t = today(); calState.week = sunStart(t.getMonth() === calState.month.getMonth() ? t : calState.month); }
     else calState.month = new Date(calState.week.getFullYear(), calState.week.getMonth(), 1);
     rerender();
   }));

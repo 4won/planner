@@ -2,6 +2,7 @@
 // All of them render into the single <dialog id="sheet">.
 import { $, el, btn, option, armedDelete, ddayEl } from './ui.js';
 import { ymd, today, parse, addDays, weekStart, mdLong, newId, leadLabel, okDate, remindLabel } from './dates.js';
+import { holidayOf } from './holidays.js';
 import { COLORS, COLOR_NAMES, STATUSES, PRIORITIES, REMIND_OPTIONS, normTask, normEvent, normProject, normTags, tagsText, withStatus, eventsOn, eventTimeText, normRecur, recurText, channelLabel } from './model.js';
 import { tasks, events, projects, activeProjects, allEvents, promosIn, projectName } from './db.js';
 
@@ -350,7 +351,7 @@ export function openAdd(date) {
 
 export function openDay(dateStr) {
   const d = parse(dateStr);
-  open(`${d.getFullYear()}년 ${mdLong(d)}`, form => {
+  open(`${d.getFullYear()}년 ${mdLong(d)}${holidayOf(dateStr) ? ` · ${holidayOf(dateStr)}` : ''}`, form => {
     const list = el('div', 'group');
     const evs = eventsOn(allEvents(dateStr, dateStr), dateStr);
     const due = tasks.all().filter(t => t.due === dateStr);

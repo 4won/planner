@@ -1,8 +1,9 @@
 // Desktop wallpaper widget (widget.html?token=…): clock, weather, today's schedule,
 // this week's checklist and the next few days. Read-only; refreshes itself.
 // Options in the address: side=left|right, theme=dark|light, scale=0.8~1.6, bg=none
-import { ymd, parse, addDays, today, weekStart, DOW, pad, ddayText, nowTime } from './dates.js';
+import { ymd, parse, addDays, today, weekStart, sunStart, DOW, pad, ddayText, nowTime } from './dates.js';
 import { normTask, normEvent, normExtEvent, weekRole, isCheckedIn, eventsOn, eventTimeText, occurrences, byDue } from './model.js';
+import { holidayOf } from './holidays.js';
 import { HOME_PLACE, WMO, ICONS, weatherUrl, compareYesterday, todayTip } from './weather.js';
 
 const q = new URLSearchParams(location.search);
@@ -202,9 +203,9 @@ function renderCalendar() {
   $('calPrev').disabled = monthOffset() <= MONTH_MIN;
   $('calNext').disabled = monthOffset() >= MONTH_MAX;
   const dow = $('calDow');
-  if (!dow.childElementCount) ['월', '화', '수', '목', '금', '토', '일'].forEach((d, i) => dow.append(el('div', i === 5 ? 'sat' : i === 6 ? 'sun' : '', d)));
+  if (!dow.childElementCount) ['일', '월', '화', '수', '목', '금', '토'].forEach((d, i) => dow.append(el('div', i === 6 ? 'sat' : i === 0 ? 'sun' : '', d)));
 
-  const first = weekStart(calMonth);
+  const first = sunStart(calMonth); // calendar weeks start on Sunday
   const last = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0);
   const weeks = Math.ceil((Math.round((last - first) / 864e5) + 1) / 7);
   const from = ymd(first), to = ymd(addDays(first, weeks * 7 - 1));
@@ -219,9 +220,13 @@ function renderCalendar() {
     const c = el('div', 'cal-day');
     if (d.getMonth() !== calMonth.getMonth()) c.classList.add('out');
     if (ds === tStr) c.classList.add('today');
-    if (d.getDay() === 0) c.classList.add('sun'); else if (d.getDay() === 6) c.classList.add('sat');
-    c.append(el('span', 'cal-num', String(d.getDate())));
-    c.title = `${d.getMonth() + 1}월 ${d.getDate()}일 — 두 번 누르면 앱에서 열기`;
+    const hol = holidayOf(ds);
+    if (hol || d.getDay() === 0) c.classList.add('sun'); else if (d.getDay() === 6) c.classList.add('sat');
+    if (d.getDay() === 0 || d.getDay() === 6) c.classList.add('wkend');
+    const top = el('div', 'cal-top-line'); top.append(el('span', 'cal-num', String(d.getDate())));
+    if (hol) top.append(el('span', 'cal-hol', hol));
+    c.append(top);
+    c.title = `${d.getMonth() + 1}월 ${d.getDate()}일${hol ? ` ${hol}` : ''} — 두 번 누르면 앱에서 열기`;
     c.addEventListener('dblclick', e => { e.stopPropagation(); openApp(`calendar/${ds}`); });
     const items = [
       ...eventsOn(evs, ds).map(e => ({ kind: 'ev', e })),

@@ -1,5 +1,5 @@
 import { $, $$, el, btn, showBanner, hideBanner } from './ui.js';
-import { parse, weekStart } from './dates.js';
+import { parse, sunStart } from './dates.js';
 import { CLOUD, sb, state, onChange, startLocal, startSession, stopSession, refresh, flush, pendingCount } from './store.js';
 import { tasks, activeProjects } from './db.js';
 import { setNavigator, openAdd, openProject } from './editors.js';
@@ -124,7 +124,7 @@ function openFromLink() {
   if (m && VIEWS.includes(m[1])) view = m[1];
   if (m && m[1] === 'calendar' && m[2]) {
     const d = parse(m[2]);
-    calState.month = new Date(d.getFullYear(), d.getMonth(), 1); calState.week = weekStart(d); calState.selected = m[2];
+    calState.month = new Date(d.getFullYear(), d.getMonth(), 1); calState.week = sunStart(d); calState.selected = m[2];
   }
   history.replaceState(null, '', location.pathname + '#' + view);
 }

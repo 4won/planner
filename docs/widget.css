@@ -135,3 +135,8 @@ body {
 .cal-more { font-size: 0.72em; color: var(--faint); padding: 0 4px; }
 .cal-hint { font-size: 0.72em; color: var(--faint); text-align: right; padding-top: 6px; }
 .wg { cursor: pointer; }
+.cal-top-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cal-hol { font-size: 0.72em; font-weight: 600; color: var(--late); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cal-day.wkend { background: rgba(255, 255, 255, 0.035); }
+:root[data-theme="light"] .cal-day.wkend { background: rgba(22, 32, 42, 0.04); }
+.cal-day.wkend:hover { background: rgba(127, 184, 230, 0.08); }

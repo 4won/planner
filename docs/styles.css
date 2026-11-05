@@ -849,3 +849,18 @@ input[type=date], input[type=time] { min-width: 0; max-width: 100%; box-sizing: 
 /* mobile top bar: + as an icon button the size of the settings button */
 .mtop .js-add.iconbtn { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .mtop .js-add.iconbtn svg { stroke: var(--accent-ink); stroke-width: 2.2; }
+
+/* Korean public holidays: red like Sunday, name at the top right of the day */
+.mhol { grid-row: 1; align-self: center; justify-self: end; margin-right: 8px; max-width: calc(100% - 40px); font-size: .7rem; font-weight: 600; color: var(--sun); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.mhol.dim { opacity: .5; }
+.wc-day.sun .wc-dow, .wc-day.sun:not(.today) .wc-num { color: var(--sun); }
+.wc-day.sat .wc-dow, .wc-day.sat:not(.today) .wc-num { color: var(--sat); }
+.wc-dow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+@media (max-width: 640px) { .mhol { display: none; } }
+
+/* weekends are rarely used for work: tint them so weekdays stand out */
+.mday.wkend { background: color-mix(in srgb, var(--muted) 9%, var(--surface)); }
+.mday.wkend.out { background: color-mix(in srgb, var(--muted) 12%, var(--surface)); }
+.mday.wkend:hover { background: color-mix(in srgb, var(--soft) 60%, var(--surface)); }
+.wc-col.wkend { background-color: color-mix(in srgb, var(--muted) 9%, transparent); }
+.wc-day.wkend { background: color-mix(in srgb, var(--muted) 9%, transparent); }

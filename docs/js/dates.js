@@ -8,6 +8,8 @@ export const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() 
 export const today = () => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); };
 export const todayStr = () => ymd(today());
 export const weekStart = d => addDays(new Date(d.getFullYear(), d.getMonth(), d.getDate()), -((d.getDay() + 6) % 7));
+// Calendar screens start their weeks on Sunday (the weekly checklist keeps Monday weeks).
+export const sunStart = d => addDays(new Date(d.getFullYear(), d.getMonth(), d.getDate()), -d.getDay());
 export const daysBetween = (a, b) => Math.round((b - a) / 864e5);
 export const isoWeek = d => {
   const t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 3 - ((d.getDay() + 6) % 7));
