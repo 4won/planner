@@ -1,5 +1,5 @@
 // App shell: network first so a new deploy shows up right away, cache as the offline fallback.
-const CACHE = 'wcp-v10';
+const CACHE = 'wcp-v11';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/badge-96.png',
   'js/main.js', 'js/store.js', 'js/db.js', 'js/model.js', 'js/dates.js', 'js/ui.js', 'js/weather.js', 'js/editors.js',
   'js/views/common.js', 'js/views/week.js', 'js/views/dashboard.js', 'js/views/calendar.js', 'js/views/projects.js', 'js/views/memos.js', 'js/views/settings.js'];

@@ -17,10 +17,11 @@ Deno.serve(async req => {
   const uid = feed.user_id;
 
   const t = seoulToday();
-  const from = fmtDate(t - 14 * DAY), to = fmtDate(t + 14 * DAY);
+  // Wide enough for the month calendar: last month through two months ahead.
+  const from = fmtDate(t - 45 * DAY), to = fmtDate(t + 100 * DAY);
   const [tasks, events, ext, cals, projects] = await Promise.all([
     admin.from('tasks').select('id,title,due,lead,repeat,color,checks,done,done_at,created,project_id,tags,status,priority')
-      .eq('user_id', uid).or(`done.eq.false,done_at.gte.${from}`),
+      .eq('user_id', uid).or(`done.eq.false,done_at.gte.${from},due.gte.${from}`),
     admin.from('events').select('id,title,start_date,start_time,end_date,end_time,location,color,project_id,recur')
       .eq('user_id', uid).lte('start_date', to).or(`end_date.gte.${from},recur.not.is.null`),
     admin.from('external_events').select('id,calendar_id,title,start_date,start_time,end_date,end_time,location')

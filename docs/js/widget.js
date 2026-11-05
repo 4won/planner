@@ -11,8 +11,18 @@ const root = document.documentElement;
 root.dataset.side = q.get('side') === 'left' ? 'left' : 'right';
 root.dataset.theme = q.get('theme') === 'light' ? 'light' : 'dark';
 if (q.get('bg') === 'none') root.dataset.bg = 'none';
+if (q.get('cal') === 'off') root.dataset.cal = 'off';
 const scale = Math.min(1.6, Math.max(0.8, Number(q.get('scale')) || 1));
 root.style.setProperty('--scale', scale);
+const APP_URL = new URL('./', location.href).href;
+
+// Double click opens the installed app (web+planner:// is registered by the app's manifest).
+// launch=web opens the app's web address instead, for PCs where the link isn't registered.
+function openApp(path) {
+  const link = `web+planner://${path}`;
+  if (q.get('launch') === 'web') { window.open(`${APP_URL}?open=${encodeURIComponent(link)}`, '_blank', 'noopener'); return; }
+  const a = document.createElement('a'); a.href = link; a.rel = 'noopener'; document.body.append(a); a.click(); a.remove();
+}
 
 const DATA_EVERY = 5 * 60000, WEATHER_EVERY = 30 * 60000;
 const $ = id => document.getElementById(id);
@@ -170,12 +180,84 @@ function render() {
     if (!n) nx.append(el('div', 'wg-empty', '일주일 안에 다른 일정이 없습니다.'));
   }
 
+  renderCalendar();
+
   // footer
   const f = $('wgFoot');
   const at = data && data.at ? new Date(data.at) : null;
   const when = at ? `${pad(at.getHours())}:${pad(at.getMinutes())}` : '';
   f.className = 'wg-foot' + (lastError ? ' err' : '');
   f.textContent = lastError ? `${lastError}${when ? ` · 마지막 업데이트 ${when}` : ''}` : when ? `${when} 업데이트 · 5분마다 새로 고침` : '';
+}
+
+// ---------- month calendar ----------
+let calMonth = new Date(today().getFullYear(), today().getMonth(), 1);
+const MONTH_MIN = -1, MONTH_MAX = 2; // the server sends last month through two months ahead
+const monthOffset = () => (calMonth.getFullYear() - today().getFullYear()) * 12 + calMonth.getMonth() - today().getMonth();
+
+function renderCalendar() {
+  if (root.dataset.cal === 'off') return;
+  const t = today(), tStr = ymd(t);
+  $('calTitle').textContent = `${calMonth.getFullYear()}년 ${calMonth.getMonth() + 1}월`;
+  $('calPrev').disabled = monthOffset() <= MONTH_MIN;
+  $('calNext').disabled = monthOffset() >= MONTH_MAX;
+  const dow = $('calDow');
+  if (!dow.childElementCount) ['월', '화', '수', '목', '금', '토', '일'].forEach((d, i) => dow.append(el('div', i === 5 ? 'sat' : i === 6 ? 'sun' : '', d)));
+
+  const first = weekStart(calMonth);
+  const last = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0);
+  const weeks = Math.ceil((Math.round((last - first) / 864e5) + 1) / 7);
+  const from = ymd(first), to = ymd(addDays(first, weeks * 7 - 1));
+  const evs = data ? eventsIn(from, to) : [];
+  const tks = data ? data.tasks.map(d => normTask(d.id, d)).filter(x => x.due && x.due >= from && x.due <= to) : [];
+
+  const grid = $('calGrid'); grid.textContent = '';
+  grid.style.gridTemplateRows = `repeat(${weeks}, minmax(0, 1fr))`;
+  const cells = [];
+  for (let i = 0; i < weeks * 7; i++) {
+    const d = addDays(first, i), ds = ymd(d);
+    const c = el('div', 'cal-day');
+    if (d.getMonth() !== calMonth.getMonth()) c.classList.add('out');
+    if (ds === tStr) c.classList.add('today');
+    if (d.getDay() === 0) c.classList.add('sun'); else if (d.getDay() === 6) c.classList.add('sat');
+    c.append(el('span', 'cal-num', String(d.getDate())));
+    c.title = `${d.getMonth() + 1}월 ${d.getDate()}일 — 두 번 누르면 앱에서 열기`;
+    c.addEventListener('dblclick', e => { e.stopPropagation(); openApp(`calendar/${ds}`); });
+    const items = [
+      ...eventsOn(evs, ds).map(e => ({ kind: 'ev', e })),
+      ...tks.filter(x => x.due === ds).sort((a, b) => a.done - b.done || a.title.localeCompare(b.title, 'ko')).map(x => ({ kind: 'due', x })),
+    ];
+    cells.push([c, items, ds]);
+    grid.append(c);
+  }
+  // Fill each cell with as many lines as fit, then "+N".
+  const sample = cells[0][0];
+  const lineH = 21 * scale, room = Math.max(1, Math.floor((sample.clientHeight - 24 * scale) / lineH));
+  cells.forEach(([c, items, ds]) => {
+    const fit = items.length > room ? room - 1 : items.length;
+    items.slice(0, Math.max(0, fit)).forEach(it => {
+      if (it.kind === 'ev') {
+        const e = it.e, r = el('div', 'cal-item ev c-' + (e.color || 'violet'));
+        if (e.startTime && e.startDate === ds) r.append(el('b', null, e.startTime));
+        r.append(el('span', null, e.title)); r.title = e.title + (e.location ? ` · ${e.location}` : '');
+        c.append(r);
+      } else {
+        const x = it.x, r = el('div', 'cal-item due c-' + x.color + (x.done ? ' done' : ''));
+        r.append(el('span', null, x.title)); r.title = `마감: ${x.title}`;
+        c.append(r);
+      }
+    });
+    if (items.length > fit) c.append(el('div', 'cal-more', `+${items.length - Math.max(0, fit)}개`));
+  });
+}
+
+function wireCalendar() {
+  const go = n => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); renderCalendar(); };
+  $('calPrev').addEventListener('click', () => go(-1));
+  $('calNext').addEventListener('click', () => go(1));
+  $('calToday').addEventListener('click', () => { calMonth = new Date(today().getFullYear(), today().getMonth(), 1); renderCalendar(); });
+  $('wg').addEventListener('dblclick', () => openApp('home'));
+  let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderCalendar, 150); });
 }
 
 // ---------- start ----------
@@ -185,6 +267,7 @@ if (!token) {
   box.append(el('h1', null, '위젯 주소가 필요합니다'), el('p', null, '플래너 앱의 설정 → 바탕화면 위젯에서 주소를 복사해 이 주소 대신 넣어 주세요.'));
   s.append(box); document.body.append(s);
 } else {
+  wireCalendar();
   render(); renderWeather();
   loadData(); loadWeather();
   setInterval(loadData, DATA_EVERY);

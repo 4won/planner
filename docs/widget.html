@@ -13,6 +13,17 @@
 <script src="config.js"></script>
 </head>
 <body>
+<section class="wg-cal" id="wgCal" aria-label="월 달력">
+  <div class="cal-top">
+    <h2 id="calTitle"></h2>
+    <button type="button" class="cal-btn" id="calPrev" aria-label="이전 달">‹</button>
+    <button type="button" class="cal-btn" id="calToday">오늘</button>
+    <button type="button" class="cal-btn" id="calNext" aria-label="다음 달">›</button>
+  </div>
+  <div class="cal-dow" id="calDow"></div>
+  <div class="cal-grid" id="calGrid"></div>
+  <div class="cal-hint">날짜를 두 번 누르면 앱에서 열립니다</div>
+</section>
 <main class="wg" id="wg">
   <header class="wg-clock">
     <div class="wg-time" id="wgTime">--:--</div>

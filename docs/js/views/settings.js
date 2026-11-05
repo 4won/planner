@@ -124,7 +124,7 @@ function widgetSection() {
   s.append(el('p', 'set-small', '오늘 일정 · 이번 주 체크리스트 · 날씨를 바탕화면에 띄워 둡니다. 5분마다 알아서 새로 고칩니다. 캘린더 구독 주소와 같은 비밀 값을 쓰므로 다른 사람과 공유하지 마세요.'));
   const box = el('div', 'feed'); const m = msgEl();
   s.append(box, m);
-  const opts = { theme: 'dark', side: 'right' };
+  const opts = { theme: 'dark', side: 'right', cal: 'on', launch: 'app' };
   const paint = async () => {
     box.textContent = '';
     const { data, error } = await sb.from('calendar_feeds').select('token').maybeSingle();
@@ -142,6 +142,8 @@ function widgetSection() {
       u.searchParams.set('token', data.token);
       if (opts.theme !== 'dark') u.searchParams.set('theme', opts.theme);
       if (opts.side !== 'right') u.searchParams.set('side', opts.side);
+      if (opts.cal === 'off') u.searchParams.set('cal', 'off');
+      if (opts.launch === 'web') u.searchParams.set('launch', 'web');
       return u.href;
     };
     const input = el('input', 'feed-url'); input.readOnly = true; input.setAttribute('aria-label', '위젯 주소');
@@ -153,7 +155,8 @@ function widgetSection() {
       return sel;
     };
     const row = el('div', 'acts');
-    row.append(pick('색', 'theme', [['dark', '어두운 배경'], ['light', '밝은 배경']]), pick('위치', 'side', [['right', '화면 오른쪽'], ['left', '화면 왼쪽']]));
+    row.append(pick('색', 'theme', [['dark', '어두운 배경'], ['light', '밝은 배경']]), pick('위치', 'side', [['right', '화면 오른쪽'], ['left', '화면 왼쪽']]),
+      pick('달력', 'cal', [['on', '월 달력 함께'], ['off', '요약만']]), pick('두 번 누르면', 'launch', [['app', '설치된 앱 열기'], ['web', '브라우저로 열기']]));
     input.value = urlOf();
     const a = el('div', 'acts');
     a.append(btn('btn', '주소 복사', ev => copyText(input.value, ev.currentTarget)));
@@ -166,6 +169,7 @@ function widgetSection() {
     ['Microsoft Store에서 ‘Lively Wallpaper’(무료)를 설치합니다.',
       'Lively를 열고 ‘+’(배경 화면 추가)를 누른 뒤, 웹 주소(URL) 입력 칸에 위 주소를 붙여 넣습니다.',
       '추가된 위젯을 배경 화면으로 지정합니다. 창을 모두 내리면(Win+D) 바탕화면에 보입니다.',
+      '날짜나 요약을 두 번 누르면 설치된 플래너 앱이 그 날짜로 열립니다. 처음 한 번은 ‘열기 허용’ 창이 뜰 수 있습니다. 앱이 열리지 않으면 플래너 앱을 한 번 열었다 닫은 뒤 다시 해 보고, 그래도 안 되면 위에서 ‘브라우저로 열기’를 고르세요.',
       'PC를 켤 때 자동으로 나오게 하려면 Lively 설정에서 ‘Windows 시작 시 실행’을 켭니다.',
       '주소가 유출되면 위 ‘구글 · 애플 캘린더’의 ‘주소 새로 만들기’를 누르고, 새 위젯 주소로 바꿔 넣으세요.'].forEach(t => ol.append(el('li', null, t)));
     how.append(ol); box.append(how);

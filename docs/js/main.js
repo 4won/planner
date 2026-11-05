@@ -1,10 +1,11 @@
 import { $, $$, el, btn, showBanner, hideBanner } from './ui.js';
+import { parse, weekStart } from './dates.js';
 import { CLOUD, sb, state, onChange, startLocal, startSession, stopSession, refresh, flush, pendingCount } from './store.js';
 import { tasks, activeProjects } from './db.js';
 import { setNavigator, openAdd, openProject } from './editors.js';
 import { renderDashboard, setDashNav } from './views/dashboard.js';
 import { renderWeek, wireWeek, rollWeekIfNeeded } from './views/week.js';
-import { renderCalendar, wireCalendar } from './views/calendar.js';
+import { renderCalendar, wireCalendar, calState } from './views/calendar.js';
 import { renderProjects, wireProjects, projState, openProjectPage } from './views/projects.js';
 import { renderMemos, wireMemos, memoState, newMemo } from './views/memos.js';
 import { openSettings } from './views/settings.js';
@@ -115,9 +116,23 @@ function wire() {
   });
 }
 
+// Opened from the desktop widget: ?open=web+planner://calendar/2026-11-12 (or …://home).
+function openFromLink() {
+  const raw = new URLSearchParams(location.search).get('open');
+  if (!raw) return;
+  const m = /^web\+planner:\/*([a-z]+)(?:\/(\d{4}-\d{2}-\d{2}))?/.exec(raw);
+  if (m && VIEWS.includes(m[1])) view = m[1];
+  if (m && m[1] === 'calendar' && m[2]) {
+    const d = parse(m[2]);
+    calState.month = new Date(d.getFullYear(), d.getMonth(), 1); calState.week = weekStart(d); calState.selected = m[2];
+  }
+  history.replaceState(null, '', location.pathname + '#' + view);
+}
+
 function boot() {
   const h = (location.hash || '').slice(1);
   if (VIEWS.includes(h)) view = h;
+  openFromLink();
   wire();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (!CLOUD) { showMain(); startLocal(); return; }
