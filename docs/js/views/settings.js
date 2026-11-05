@@ -88,6 +88,9 @@ export function openSettings() {
   // ---- calendars ----
   if (CLOUD) wrap.append(calendarSection());
 
+  // ---- desktop widget ----
+  if (CLOUD) wrap.append(widgetSection());
+
   // ---- install ----
   {
     const s = section('앱으로 설치'); const p = el('p'); const a = el('div', 'acts');
@@ -113,6 +116,62 @@ export function openSettings() {
   d.append(closeX(() => d.close()), wrap);
   if (!d.open) d.showModal();
   d.querySelector('.sheet-x').focus({ preventScroll: true });
+}
+
+// ---------- desktop wallpaper widget ----------
+function widgetSection() {
+  const s = section('바탕화면 위젯 (Windows)');
+  s.append(el('p', 'set-small', '오늘 일정 · 이번 주 체크리스트 · 날씨를 바탕화면에 띄워 둡니다. 5분마다 알아서 새로 고칩니다. 캘린더 구독 주소와 같은 비밀 값을 쓰므로 다른 사람과 공유하지 마세요.'));
+  const box = el('div', 'feed'); const m = msgEl();
+  s.append(box, m);
+  const opts = { theme: 'dark', side: 'right' };
+  const paint = async () => {
+    box.textContent = '';
+    const { data, error } = await sb.from('calendar_feeds').select('token').maybeSingle();
+    if (error) return say(m, `위젯 주소를 불러오지 못했습니다: ${error.message}`, true);
+    if (!data) {
+      box.append(btn('btn', '위젯 주소 만들기', async () => {
+        const token = [...crypto.getRandomValues(new Uint8Array(24))].map(b => b.toString(16).padStart(2, '0')).join('');
+        const { error: e } = await sb.from('calendar_feeds').upsert({ user_id: state.uid, token });
+        if (e) say(m, `주소를 만들지 못했습니다: ${e.message}`, true); else paint();
+      }));
+      return;
+    }
+    const urlOf = () => {
+      const u = new URL('widget.html', location.href); u.search = ''; u.hash = '';
+      u.searchParams.set('token', data.token);
+      if (opts.theme !== 'dark') u.searchParams.set('theme', opts.theme);
+      if (opts.side !== 'right') u.searchParams.set('side', opts.side);
+      return u.href;
+    };
+    const input = el('input', 'feed-url'); input.readOnly = true; input.setAttribute('aria-label', '위젯 주소');
+    input.addEventListener('focus', () => input.select());
+    const pick = (label, key, choices) => {
+      const sel = el('select'); sel.setAttribute('aria-label', label);
+      choices.forEach(([v, t]) => sel.append(option(v, t, opts[key] === v)));
+      sel.addEventListener('change', () => { opts[key] = sel.value; input.value = urlOf(); });
+      return sel;
+    };
+    const row = el('div', 'acts');
+    row.append(pick('색', 'theme', [['dark', '어두운 배경'], ['light', '밝은 배경']]), pick('위치', 'side', [['right', '화면 오른쪽'], ['left', '화면 왼쪽']]));
+    input.value = urlOf();
+    const a = el('div', 'acts');
+    a.append(btn('btn', '주소 복사', ev => copyText(input.value, ev.currentTarget)));
+    const prev = el('a', 'btn ghost'); prev.href = input.value; prev.target = '_blank'; prev.rel = 'noopener'; prev.textContent = '미리 보기';
+    row.addEventListener('change', () => { prev.href = input.value; });
+    a.append(prev);
+    box.append(row, input, a);
+    const how = el('details', 'how'); how.append(el('summary', null, '바탕화면에 띄우는 방법'));
+    const ol = el('ol');
+    ['Microsoft Store에서 ‘Lively Wallpaper’(무료)를 설치합니다.',
+      'Lively를 열고 ‘+’(배경 화면 추가)를 누른 뒤, 웹 주소(URL) 입력 칸에 위 주소를 붙여 넣습니다.',
+      '추가된 위젯을 배경 화면으로 지정합니다. 창을 모두 내리면(Win+D) 바탕화면에 보입니다.',
+      'PC를 켤 때 자동으로 나오게 하려면 Lively 설정에서 ‘Windows 시작 시 실행’을 켭니다.',
+      '주소가 유출되면 위 ‘구글 · 애플 캘린더’의 ‘주소 새로 만들기’를 누르고, 새 위젯 주소로 바꿔 넣으세요.'].forEach(t => ol.append(el('li', null, t)));
+    how.append(ol); box.append(how);
+  };
+  paint();
+  return s;
 }
 
 // ---------- calendar links ----------

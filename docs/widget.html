@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>플래너 위젯</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="widget.css">
+<script src="config.js"></script>
+</head>
+<body>
+<main class="wg" id="wg">
+  <header class="wg-clock">
+    <div class="wg-time" id="wgTime">--:--</div>
+    <div class="wg-date" id="wgDate"></div>
+  </header>
+  <section class="wg-card wg-weather" id="wgWeather" aria-label="날씨"></section>
+  <section class="wg-card" aria-labelledby="wgTodayH">
+    <h2 id="wgTodayH">오늘 일정</h2>
+    <div id="wgToday"></div>
+  </section>
+  <section class="wg-card" aria-labelledby="wgWeekH">
+    <div class="wg-h"><h2 id="wgWeekH">이번 주 체크리스트</h2><span class="wg-count" id="wgWeekCount"></span></div>
+    <div class="wg-bar" aria-hidden="true"><span id="wgWeekBar"></span></div>
+    <div id="wgWeek"></div>
+  </section>
+  <section class="wg-card" aria-labelledby="wgNextH">
+    <h2 id="wgNextH">다가오는 일정</h2>
+    <div id="wgNext"></div>
+  </section>
+  <footer class="wg-foot" id="wgFoot"></footer>
+</main>
+<script type="module" src="js/widget.js"></script>
+</body>
+</html>

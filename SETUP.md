@@ -110,6 +110,7 @@ supabase/
   functions/weekly-digest/  월요일 주간 요약 푸시
   functions/event-reminders/ 일정 시작 전 알림 푸시
   functions/calendar-feed/   구글·애플 구독용 ICS 주소
+  functions/widget-data/     바탕화면 위젯(docs/widget.html)용 읽기 전용 데이터 (구독 주소와 같은 토큰)
   functions/calendar-sync/   구글·애플 iCal 가져오기
 RECAP.md                  Claude가 메모를 리캡하는 절차
 tools/                    아이콘·SQL 생성 스크립트
