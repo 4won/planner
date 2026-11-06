@@ -166,11 +166,24 @@ function schedulePreview() {
     } catch {}
   }, 2000);
 }
-function makeRec() {
+// Each recognizer gets a generation number; events from an older one are ignored, so a late
+// onend can never spawn a second recognizer. A watchdog replaces a recognizer that went quiet
+// (Safari sometimes stops without firing onend, or never fires onstart after a restart).
+let gen = 0, lastAlive = 0, startedAt = 0, everStarted = false, deniedTries = 0, restarts = 0, lastHeard = 0, watchT = null;
+const clock = t => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+function liveStatus() {
+  if (!listening) return;
+  paintStatus(listeningText() + (lastHeard ? ` · 마지막 인식 ${clock(lastHeard)}` : '') + (restarts ? ` · 재연결 ${restarts}회` : ''));
+}
+function makeRec(g) {
   const r = new SR();
   r.lang = LOCALE[cfg.src]; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
-  r.onstart = () => paintStatus(listeningText());
+  const alive = () => { if (g === gen) lastAlive = Date.now(); };
+  r.onstart = () => { if (g !== gen) return; alive(); everStarted = true; deniedTries = 0; liveStatus(); };
+  r.onaudiostart = r.onsoundstart = r.onspeechstart = alive;
   r.onresult = e => {
+    if (g !== gen) return;
+    alive(); lastHeard = Date.now();
     let finals = '', live = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const t = e.results[i][0].transcript;
@@ -179,27 +192,47 @@ function makeRec() {
     if (finals.trim()) { commit(finals); previewFor = ''; previewText = ''; }
     interim = live;
     setInterim(interim, previewText);
+    liveStatus();
     clearTimeout(silenceT);
     if (interim.trim()) {
       schedulePreview();
       // iPhone Safari rarely marks results final mid-stream: a pause closes the sentence instead.
-      silenceT = setTimeout(() => { if (listening && rec) { finalizeInterim(); try { rec.abort(); } catch {} } }, cfg.pause);
+      silenceT = setTimeout(() => { if (listening && g === gen) { finalizeInterim(); restart(150); } }, cfg.pause);
     }
   };
   r.onerror = e => {
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { stop(); paintStatus('마이크·음성 인식 권한이 없습니다. 브라우저에서 허용하고, 아이폰은 설정 › Siri › 받아쓰기를 켜 주세요.'); }
-    else if (e.error === 'language-not-supported') { stop(); paintStatus('이 기기에서 해당 언어 인식을 지원하지 않습니다.'); }
-    else if (e.error !== 'no-speech' && e.error !== 'aborted') console.warn('speech', e.error);
+    if (g !== gen) return;
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      // Mid-meeting Safari sometimes reports this on an automatic restart; retry a few times first.
+      if (everStarted && deniedTries < 3) { deniedTries++; restart(1000); return; }
+      stop(); paintStatus('마이크·음성 인식이 막혔습니다. 듣기를 다시 눌러 주세요. 계속되면 브라우저 권한과 아이폰 설정 › Siri › 받아쓰기를 확인하세요.');
+    } else if (e.error === 'language-not-supported') { stop(); paintStatus('이 기기에서 해당 언어 인식을 지원하지 않습니다.'); }
+    else if (e.error === 'no-speech' || e.error === 'aborted') { /* onend restarts */ }
+    else { console.warn("speech", e.error); restarts++; restart(800); }
   };
-  r.onend = () => {
-    if (interim.trim()) finalizeInterim();
-    if (listening) { clearTimeout(restartT); restartT = setTimeout(startRec, 150); }
-  };
+  r.onend = () => { if (g !== gen) return; if (interim.trim()) finalizeInterim(); if (listening) restart(150); };
   return r;
 }
-function startRec() {
+function restart(delay = 150) {
   if (!listening) return;
-  try { rec = makeRec(); rec.start(); } catch (e) { console.warn(e); restartT = setTimeout(startRec, 500); }
+  const old = rec; rec = null; gen++;
+  if (old) { old.onstart = old.onresult = old.onerror = old.onend = old.onaudiostart = old.onsoundstart = old.onspeechstart = null; try { old.abort(); } catch {} }
+  clearTimeout(restartT); restartT = setTimeout(startRec, delay);
+}
+function startRec() {
+  if (!listening || rec) return;
+  const g = ++gen;
+  startedAt = Date.now(); lastAlive = 0;
+  try { rec = makeRec(g); rec.start(); }
+  catch (e) { console.warn(e); rec = null; restartT = setTimeout(startRec, 600); }
+}
+function watchdog() {
+  if (!listening || document.visibilityState !== 'visible') return;
+  const now = Date.now();
+  if (!rec) { if (now - startedAt > 3000) startRec(); return; }
+  const neverStarted = !lastAlive && now - startedAt > 5000;   // start() swallowed silently
+  const quiet = lastAlive && now - lastAlive > 10000;           // no audio events at all for 10s
+  if (neverStarted || quiet) { if (interim.trim()) finalizeInterim(); restarts++; restart(100); }
 }
 async function requestWake() {
   if (!cfg.wake || !('wakeLock' in navigator)) return;
@@ -214,19 +247,21 @@ function setMic(on) {
 }
 function start() {
   if (!SR) return;
-  listening = true; setMic(true); paintStatus('마이크 준비 중…');
+  listening = true; everStarted = false; deniedTries = 0; restarts = 0; lastHeard = 0;
+  setMic(true); paintStatus('마이크 준비 중…');
   requestWake(); startRec();
+  clearInterval(watchT); watchT = setInterval(watchdog, 3000);
 }
 function stop() {
   listening = false;
-  clearTimeout(silenceT); clearTimeout(restartT); clearTimeout(previewT); previewT = null;
-  try { rec && rec.stop(); } catch {}
-  rec = null;
+  clearInterval(watchT); clearTimeout(silenceT); clearTimeout(restartT); clearTimeout(previewT); previewT = null;
+  const old = rec; rec = null; gen++;
+  if (old) { old.onstart = old.onresult = old.onerror = old.onend = null; try { old.stop(); } catch {} }
   finalizeInterim(); setMic(false); paintStatus('대기 중');
   try { wakeLock && wakeLock.release(); } catch {}
   wakeLock = null;
 }
-const restartIfListening = () => { if (listening) { try { rec && rec.abort(); } catch {} } };
+const restartIfListening = () => { if (listening) restart(150); };
 
 // ---------- save to memo ----------
 const lineText = it => {
