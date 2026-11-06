@@ -4,7 +4,7 @@ import { $, el, btn, option, empty, armedDelete, copyText, toast } from '../ui.j
 import { ymd, parse, md, today, hhmm, newId } from '../dates.js';
 import { normMemo, normEntry, normTask, normEvent, normTags, tagsText } from '../model.js';
 import { memos, entries, recaps, tasks, events, projects, activeProjects } from '../db.js';
-import { state } from '../store.js';
+import { state, CLOUD, sb, flush, refresh as refreshStore } from '../store.js';
 import { openTask, openEvent } from '../editors.js';
 
 export const memoState = { id: null, pane: false };
@@ -86,8 +86,13 @@ export function renderMemos() {
   const hint = $('#recapHint');
   hint.textContent = '';
   const phrase = `‘${m.title}’ 메모 리캡해줘`;
-  hint.append(el('span', null, `리캡이 필요하면 Claude 데스크톱에서 “${phrase}”라고 말하세요.`));
-  $('#memoRecapCopy').onclick = ev => copyText(phrase, ev.currentTarget.querySelector('span'));
+  hint.append(el('span', null, 'AI 리캡은 Gemini 무료 등급이라 입력이 구글 서비스 개선에 쓰일 수 있습니다. 민감한 메모는 Claude 데스크톱으로 리캡하세요.'),
+    btn('linkbtn', '요청 문구 복사', ev => copyText(phrase, ev.currentTarget)));
+  const ai = $('#memoAiRecap');
+  const busy = aiBusy.has(m.id);
+  ai.disabled = busy; ai.classList.toggle('busy', busy);
+  ai.querySelector('span').textContent = busy ? '정리하는 중…' : 'AI 리캡';
+  ai.onclick = () => aiRecap(m.id);
 }
 
 function entryEl(e, m) {
@@ -115,6 +120,34 @@ function entryEl(e, m) {
   body.append(acts);
   row.append(body);
   return row;
+}
+
+// ---------- AI recap (Gemini, server function ai-recap) ----------
+const aiBusy = new Set();
+async function aiRecap(memoId, all = false) {
+  if (!CLOUD || !state.uid) { toast('AI 리캡은 로그인한 상태에서만 쓸 수 있습니다.'); return; }
+  if (!navigator.onLine) { toast('인터넷에 연결된 뒤 다시 눌러 주세요.'); return; }
+  if (aiBusy.has(memoId)) return;
+  aiBusy.add(memoId); rerender();
+  let retryAll = false;
+  try {
+    await flush(); // lines typed a moment ago must reach the server first
+    const { data, error } = await sb.functions.invoke('ai-recap', { body: { memoId, all } });
+    if (error) {
+      let b = null;
+      try { b = await error.context.json(); } catch { /* not JSON */ }
+      if (b && b.empty && b.hasPrevious) retryAll = confirm('마지막 리캡 이후 새로 적은 내용이 없습니다.\n메모 전체로 다시 리캡할까요?');
+      else toast((b && b.error) || 'AI 리캡을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+    await refreshStore();
+    toast(data && data.proposals ? `리캡을 만들었습니다 · 등록 제안 ${data.proposals}개` : '리캡을 만들었습니다.');
+  } catch (e) {
+    toast(`AI 리캡을 만들지 못했습니다: ${(e && e.message) || e}`);
+  } finally {
+    aiBusy.delete(memoId); rerender();
+    if (retryAll) aiRecap(memoId, true);
+  }
 }
 
 // ---------- recap ----------

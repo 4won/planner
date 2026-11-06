@@ -50,6 +50,7 @@
       <button type="button" data-view="week"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M15 17l2 2 4-4"/></svg><span>이번 주</span></button>
       <button type="button" data-view="calendar"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>캘린더</span></button>
       <button type="button" data-view="memos"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg><span>메모</span></button>
+      <button type="button" data-view="translate"><svg viewBox="0 0 24 24"><path d="M3.5 5.5h9M8 3.5v2M5.5 5.5c.6 3 2.6 5.4 5.6 6.4M10.6 5.5c-.6 3-2.6 5.4-5.6 6.4"/><path d="M12.5 20.5l4-9 4 9M14 17.3h5"/></svg><span>번역</span></button>
     </nav>
     <div class="side-sec">
       <div class="side-sec-head">
@@ -159,7 +160,7 @@
           <div class="composer">
             <textarea id="memoInput" rows="2" aria-label="메모 입력 (엔터로 보내기, Shift+엔터로 줄바꿈)"></textarea>
             <div class="composer-bar">
-              <button class="composer-tool" id="memoRecapCopy" type="button" title="Claude 데스크톱에 붙여 넣을 리캡 요청 문구를 복사합니다"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>리캡 문구 복사</span></button>
+              <button class="composer-tool ai" id="memoAiRecap" type="button" title="Gemini가 이 메모를 회의 정리본과 등록 제안으로 바꿉니다"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c.6 4.6 3.4 7.4 9 9-5.6 1.6-8.4 4.4-9 9-.6-4.6-3.4-7.4-9-9 5.6-1.6 8.4-4.4 9-9z"/></svg><span>AI 리캡</span></button>
               <span class="spacer"></span>
               <button class="send-btn" id="memoSend" type="button" aria-label="보내기" title="보내기 (엔터)" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
             </div>
@@ -171,6 +172,50 @@
         </div>
       </div>
     </section>
+    <section id="view-translate" class="view" hidden>
+      <div class="page-head lt-head">
+        <h2>실시간 번역</h2>
+        <span class="spacer"></span>
+        <div class="seg" id="tlSrc" role="tablist" aria-label="말하는 언어">
+          <button type="button" data-lang="en">English</button><button type="button" data-lang="ja">日本語</button><button type="button" data-lang="ko">한국어</button>
+        </div>
+      </div>
+      <div class="lt-opts">
+        <span class="lt-label">번역</span>
+        <div class="chips" id="tlTargets">
+          <label class="chip-check"><input type="checkbox" value="ko">한국어</label>
+          <label class="chip-check"><input type="checkbox" value="ja">日本語</label>
+          <label class="chip-check"><input type="checkbox" value="en">English</label>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn ghost lt-fs" id="tlFsDown" type="button" aria-label="글자 작게">가−</button>
+        <button class="btn ghost lt-fs" id="tlFsUp" type="button" aria-label="글자 크게">가+</button>
+      </div>
+      <div class="lt-log" id="tlLog" aria-live="polite">
+        <div class="lt-empty" id="tlEmpty"><strong>회의 중에 켜 두세요</strong><p>듣기를 누르면 말하는 내용이 자막으로 흐르고, 말이 잠깐 멈출 때마다 한 문장씩 정리되며 번역이 붙습니다. 끝나면 메모로 저장해 AI 리캡으로 정리할 수 있습니다.</p></div>
+      </div>
+      <div class="lt-dock">
+        <button class="lt-mic" id="tlMic" type="button" aria-label="듣기 시작"><svg viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/></svg><span>듣기</span></button>
+        <p class="lt-status" id="tlStatus">대기 중</p>
+        <button class="btn primary" id="tlSave" type="button" disabled>메모로 저장</button>
+        <button class="btn ghost" id="tlOpenMemo" type="button" hidden>메모 열기</button>
+        <button class="btn ghost" id="tlClear" type="button">새 회의</button>
+      </div>
+      <details class="lt-settings">
+        <summary>번역 설정</summary>
+        <div class="lt-grid">
+          <label>번역 엔진<select id="tlEngine"><option value="google">무료 (키 없음, Google 웹 번역)</option><option value="azure">Azure Translator 무료 키 (월 200만 자)</option></select></label>
+          <label>문장 끊는 기준<select id="tlPause"><option value="900">짧게 0.9초</option><option value="1300">보통 1.3초</option><option value="2000">길게 2초</option></select></label>
+          <div id="tlAzure" class="lt-azure" hidden>
+            <label>Azure 키<input type="password" id="tlAzKey" autocomplete="off"></label>
+            <label>Azure 지역<input type="text" id="tlAzRegion" autocomplete="off" placeholder="koreacentral"></label>
+          </div>
+          <label class="lt-check"><input type="checkbox" id="tlPreview"> 말하는 중에도 번역 미리보기</label>
+          <label class="lt-check"><input type="checkbox" id="tlWake"> 듣는 동안 화면 꺼짐 방지</label>
+        </div>
+        <p class="quiet">무료 엔진이 막히면 MyMemory(하루 약 5천 자)로 넘어갑니다. 번역 기록과 키는 이 기기에만 저장되고, 메모로 저장한 것만 동기화됩니다. 아이폰은 설정 › Siri › 받아쓰기가 켜져 있어야 합니다.</p>
+      </details>
+    </section>
   </div>
 
   <nav class="bottom-nav" aria-label="화면">
@@ -179,6 +224,7 @@
     <button type="button" data-view="calendar"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>캘린더</span></button>
     <button type="button" data-view="projects"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="16.5" y="4" width="4" height="13" rx="1.5"/></svg><span>프로젝트</span></button>
     <button type="button" data-view="memos"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg><span>메모</span></button>
+      <button type="button" data-view="translate"><svg viewBox="0 0 24 24"><path d="M3.5 5.5h9M8 3.5v2M5.5 5.5c.6 3 2.6 5.4 5.6 6.4M10.6 5.5c-.6 3-2.6 5.4-5.6 6.4"/><path d="M12.5 20.5l4-9 4 9M14 17.3h5"/></svg><span>번역</span></button>
   </nav>
 </div>
 

@@ -111,6 +111,8 @@ supabase/
   functions/event-reminders/ 일정 시작 전 알림 푸시
   functions/calendar-feed/   구글·애플 구독용 ICS 주소
   functions/widget-data/     바탕화면 위젯(docs/widget.html)용 읽기 전용 데이터 (구독 주소와 같은 토큰)
+  functions/ai-recap/        메모 "AI 리캡" 버튼: Gemini 무료 등급으로 정리본·등록 제안을 recaps에 저장
+                             비밀값 GEMINI_API_KEY (.gemini.local.txt → secrets set), 선택 GEMINI_MODEL (쉼표로 순서, 기본 gemini-3.5-flash,gemini-flash-latest,gemini-3.8-flash)
   functions/calendar-sync/   구글·애플 iCal 가져오기
 RECAP.md                  Claude가 메모를 리캡하는 절차
 tools/                    아이콘·SQL 생성 스크립트

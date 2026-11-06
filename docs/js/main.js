@@ -8,9 +8,10 @@ import { renderWeek, wireWeek, rollWeekIfNeeded } from './views/week.js';
 import { renderCalendar, wireCalendar, calState } from './views/calendar.js';
 import { renderProjects, wireProjects, projState, openProjectPage } from './views/projects.js';
 import { renderMemos, wireMemos, memoState, newMemo } from './views/memos.js';
+import { renderTranslate, wireTranslate, setTransNav } from './views/translate.js';
 import { openSettings } from './views/settings.js';
 
-const VIEWS = ['home', 'week', 'calendar', 'projects', 'memos'];
+const VIEWS = ['home', 'week', 'calendar', 'projects', 'memos', 'translate'];
 let view = 'home';
 
 function setView(v, opts = {}) {
@@ -33,6 +34,7 @@ function render() {
   else if (view === 'week') renderWeek();
   else if (view === 'calendar') renderCalendar();
   else if (view === 'projects') renderProjects();
+  else if (view === 'translate') renderTranslate();
   else renderMemos();
   updateSync();
 }
@@ -105,8 +107,8 @@ function wire() {
   $('#sideNewProject').addEventListener('click', () => openProject(null, p => { if (p) setView('projects', { project: p.id }); }));
   $('#authForm').addEventListener('submit', e => { e.preventDefault(); onAuth('login'); });
   $('#authSignup').addEventListener('click', () => onAuth('signup'));
-  wireWeek(); wireCalendar(); wireProjects(); wireMemos();
-  setNavigator(setView); setDashNav(setView);
+  wireWeek(); wireCalendar(); wireProjects(); wireMemos(); wireTranslate();
+  setNavigator(setView); setDashNav(setView); setTransNav(setView);
   onChange(render);
   window.addEventListener('planner:render', render);
   document.addEventListener('visibilitychange', () => {

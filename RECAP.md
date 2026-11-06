@@ -157,3 +157,9 @@ npx -y supabase db query --remote=ljltbagrjoowcseedwnw -f <파일 경로> --yes
 
 - 요약과 제안 목록을 짧게 보여 준다.
 - 앱의 해당 메모 위에 리캡 카드가 떴으니, 제안을 검토해 **선택 항목 등록**을 누르라고 안내한다.
+
+## 참고: 앱의 "AI 리캡" 버튼
+
+앱 메모 화면의 **AI 리캡** 버튼은 같은 형식을 서버 함수 `ai-recap`이 Gemini(무료 등급)로 만든다.
+- 규칙 문장은 `supabase/functions/ai-recap/index.ts`의 `RULES`에 있다. 이 문서의 3번을 바꾸면 그쪽도 함께 맞춘다.
+- 버튼은 마지막 리캡 이후 줄만 정리한다. 새 줄이 없으면 전체로 다시 할지 묻는다.
