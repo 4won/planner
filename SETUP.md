@@ -92,6 +92,17 @@ Supabase 대시보드 **Authentication → URL Configuration**에서
 Claude가 [RECAP.md](RECAP.md) 절차대로 요약과 등록 제안을 만들고, 앱의 메모 위에 리캡 카드로 띄웁니다.
 카드에서 제목·날짜·프로젝트를 고치고 **선택 항목 등록**을 누르면 업무·일정이 만들어집니다.
 
+## 9. 번역 탭 화자 구분 (Azure, 선택)
+
+1. portal.azure.com에서 **Speech** 리소스를 **Free F0** 요금제·**Korea Central** 지역으로 만들고, "키 및 엔드포인트"에서 키 1을 복사합니다.
+2. 서버 비밀값을 등록합니다 (Supabase 대시보드 › Edge Functions › Secrets, 또는 아래 명령).
+   ```
+   npx -y supabase secrets set AZURE_SPEECH_KEY=<키1> AZURE_SPEECH_REGION=koreacentral SPEECH_USER_IDS=<내 사용자 ID> --remote=ljltbagrjoowcseedwnw
+   ```
+3. 앱 번역 탭 › 번역 설정 › 음성 인식을 **Azure 화자 자동 구분**으로 바꿉니다.
+
+사용 시간은 표 `speech_usage`에 월별(UTC)로 쌓이고, 5시간(`SPEECH_LIMIT_SEC`, 초 단위)이 차면 `speech-token` 함수가 토큰을 그만 주고 앱은 기기 내장 인식으로 자동 전환해 계속 듣습니다.
+
 ## 파일 구성
 
 ```
