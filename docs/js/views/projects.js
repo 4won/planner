@@ -77,7 +77,7 @@ function renderOverview() {
   if (!state.loaded) { box.append(el('div', 'empty', '불러오는 중…')); return; }
   const grid = el('div', 'pcards');
   const card = (id, name, color, list, sub) => {
-    const c = btn('pcard', '', () => { openProjectPage(id); rerender(); });
+    const c = btn('pcard' + (color ? ' c-' + color : ''), '', () => { openProjectPage(id); rerender(); });
     const h = el('div', 'pcard-head'); if (color) h.append(el('span', 'dot big c-' + color)); h.append(el('span', 'pcard-name', name)); c.append(h);
     const open = list.filter(t => !t.done);
     const done = list.length - open.length;

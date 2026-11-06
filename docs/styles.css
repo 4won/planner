@@ -864,3 +864,104 @@ input[type=date], input[type=time] { min-width: 0; max-width: 100%; box-sizing: 
 .mday.wkend:hover { background: color-mix(in srgb, var(--soft) 60%, var(--surface)); }
 .wc-col.wkend { background-color: color-mix(in srgb, var(--muted) 9%, transparent); }
 .wc-day.wkend { background: color-mix(in srgb, var(--muted) 9%, transparent); }
+
+/* ---------- glow palette: lines take the memo composer's cyan→violet cast; project colors are two-tone gradients ---------- */
+:root {
+  --line: #dde2f3; --line-strong: #c9d0ec;
+  --glow-line: linear-gradient(120deg, var(--glow-a), var(--glow-b));
+  /* each project color = start → end, Gemini-style soft blends */
+  --tag-teal: #179fb3;   --tag-teal2: #5a7cf0;
+  --tag-blue: #3b78e7;   --tag-blue2: #9b6cf0;
+  --tag-violet: #7a58ee; --tag-violet2: #cf5fc0;
+  --tag-rose: #d94c86;   --tag-rose2: #ef7d63;
+  --tag-orange: #e0662c; --tag-orange2: #e9a23a;
+  --tag-amber: #c98812;  --tag-amber2: #e2625c;
+  --tag-green: #23966a;  --tag-green2: #33a9c4;
+  --tag-brown: #9a6346;  --tag-brown2: #c7807a;
+  --tag-slate: #5b6d86;  --tag-slate2: #8c83bf;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --line: #2c3350; --line-strong: #3a4266;
+    --tag-teal: #4cc9d8;   --tag-teal2: #8aa6ff;
+    --tag-blue: #73a6ff;   --tag-blue2: #b39cff;
+    --tag-violet: #a68cff; --tag-violet2: #e08ae6;
+    --tag-rose: #f08ab0;   --tag-rose2: #ffab8c;
+    --tag-orange: #ff9a5c; --tag-orange2: #ffd06a;
+    --tag-amber: #f0b84a;  --tag-amber2: #ff8f86;
+    --tag-green: #5fd39a;  --tag-green2: #6fd6e6;
+    --tag-brown: #d0a084;  --tag-brown2: #eab0a4;
+    --tag-slate: #9aabc0;  --tag-slate2: #b8b0e6;
+  }
+}
+.c-teal { --c2: var(--tag-teal2); } .c-blue { --c2: var(--tag-blue2); } .c-violet { --c2: var(--tag-violet2); }
+.c-rose { --c2: var(--tag-rose2); } .c-orange { --c2: var(--tag-orange2); } .c-amber { --c2: var(--tag-amber2); }
+.c-green { --c2: var(--tag-green2); } .c-brown { --c2: var(--tag-brown2); } .c-slate { --c2: var(--tag-slate2); }
+[class*="c-"] { --cg: linear-gradient(120deg, var(--c), var(--c2, var(--c))); }
+
+/* solid fills become gradients */
+.dot:not(.all), .mi-dot, .swatches label, .mitem.bar, .tl-bar, .wc-ev, .card-proj .dot { background: var(--cg, var(--c)); }
+.mitem.k-ext.bar, .wc-ev.k-ext { background: color-mix(in srgb, var(--c) 22%, var(--surface)); }
+.k-ext .mi-dot { background: transparent; }
+.mitem.k-promo, .mitem.k-promo.bar { background: transparent; }
+.period-chip { background: linear-gradient(90deg, transparent var(--fill), color-mix(in srgb, var(--surface) 55%, transparent) var(--fill)), var(--cg, var(--c)); }
+
+/* group tables and board cards: gradient edge instead of a flat stripe */
+.mg-table, .mgroup.collapsed .mg-head { border-left-width: 1px; position: relative; }
+.mg-table::before, .mgroup.collapsed .mg-head::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: linear-gradient(180deg, var(--c), var(--c2, var(--c))); z-index: 1; pointer-events: none;
+}
+.mgroup.collapsed .mg-head::before { border-radius: 8px 0 0 8px; }
+.mg-name, .mg-toggle, .tl-group .tl-label { background-image: var(--cg); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.mg-name:focus { color: var(--ink); background-image: none; }
+
+/* project cards: soft gradient wash + top hairline in the project's colors */
+.pcard { position: relative; overflow: hidden; border-radius: 16px; border-color: var(--line);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c, transparent) 9%, var(--surface)) 0%, var(--surface) 55%, color-mix(in srgb, var(--c2, transparent) 7%, var(--surface)) 100%);
+  transition: box-shadow .2s ease, border-color .2s ease, transform .2s ease; }
+.pcard::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--cg, var(--glow-line)); }
+.pcard:hover { border-color: transparent; transform: translateY(-1px);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--c, var(--glow-a)) 55%, transparent), 0 10px 26px -12px color-mix(in srgb, var(--c2, var(--glow-b)) 60%, transparent); }
+.pcard .dot.big { width: 14px; height: 14px; }
+@media (prefers-reduced-motion: reduce) { .pcard:hover { transform: none; } }
+
+/* accents on focus / selection pick up the glow */
+input:focus, select:focus, textarea:focus { border-color: color-mix(in srgb, var(--glow-b) 70%, var(--glow-a)); }
+
+/* status colors: same two-tone treatment, a touch softer than primaries */
+:root {
+  --st-todo: #98a2c0; --st-doing: #4a7fe8; --st-stuck: #e0527a; --st-done: #1fa38a;
+  --st-todo2: #b7b0d6; --st-doing2: #8e6cf0; --st-stuck2: #f08a62; --st-done2: #45b9d0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --st-todo: #8994b4; --st-doing: #73a6ff; --st-stuck: #f07fa0; --st-done: #4fd1b0;
+    --st-todo2: #a9a2cf; --st-doing2: #b39cff; --st-stuck2: #ffa585; --st-done2: #7ad8ea;
+  }
+}
+.st-todo { --stg: linear-gradient(120deg, var(--st-todo), var(--st-todo2)); }
+.st-doing { --stg: linear-gradient(120deg, var(--st-doing), var(--st-doing2)); }
+.st-stuck { --stg: linear-gradient(120deg, var(--st-stuck), var(--st-stuck2)); }
+.st-done { --stg: linear-gradient(120deg, var(--st-done), var(--st-done2)); }
+.seg[class*="st-"], .sw[class*="st-"], .stcell[class*="st-"], .vbar-fill.st-todo, .col[class*="st-"] .col-head { background: var(--stg); }
+
+/* phone table cards: status is a small pill next to the due date, not a full-width block.
+   The select keeps 16px (no iOS focus zoom) and is scaled down with zoom. */
+@media (max-width: 760px) {
+  .mrow:not(.madd):not(.msum) { grid-template-columns: 22px 30px auto minmax(0, 1fr); row-gap: 4px; }
+  .mrow .stcell { zoom: .78; height: 30px; width: auto; min-width: 92px; padding: 0 14px; border-radius: 999px; margin-left: 5px; align-self: center; justify-self: start; }
+  .mrow .mdue { padding-left: 8px; }
+}
+
+/* week view: the date block is as tall as that day's event list */
+.day { align-items: stretch; }
+.day-label { align-content: center; }
+
+/* main table, 761–1100px: the period column is hidden, so the grid drops that track
+   (a 0-width track used to swallow the due date and squash the "마감" header) */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .mrow { grid-template-columns: 22px 34px minmax(180px, 1fr) 116px 92px 132px; }
+}
+/* line left of the checkbox, matching the header row */
+.mrow:not(.mhead):not(.madd):not(.msum) > .grip { box-shadow: inset -1px 0 0 var(--line); }
+@media (max-width: 760px) { .mrow:not(.mhead):not(.madd):not(.msum) > .grip { box-shadow: none; } }
