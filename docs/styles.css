@@ -912,8 +912,6 @@ input[type=date], input[type=time] { min-width: 0; max-width: 100%; box-sizing: 
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: linear-gradient(180deg, var(--c), var(--c2, var(--c))); z-index: 1; pointer-events: none;
 }
 .mgroup.collapsed .mg-head::before { border-radius: 8px 0 0 8px; }
-.mg-name, .mg-toggle, .tl-group .tl-label { background-image: var(--cg); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.mg-name:focus { color: var(--ink); background-image: none; }
 
 /* project cards: soft gradient wash + top hairline in the project's colors */
 .pcard { position: relative; overflow: hidden; border-radius: 16px; border-color: var(--line);
