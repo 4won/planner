@@ -6,6 +6,7 @@ import { $, el, btn, toast, copyText } from '../ui.js';
 import { md, today, hhmm, newId } from '../dates.js';
 import { normMemo, normEntry } from '../model.js';
 import { memos, entries } from '../db.js';
+import { CLOUD, sb } from '../store.js';
 
 const LOCALE = { en: 'en-US', ja: 'ja-JP', ko: 'ko-KR' };
 const NAME = { en: 'EN', ja: 'JA', ko: 'KO' };
@@ -15,7 +16,7 @@ const KEY = 'wcp:translate:';
 const load = (k, d) => { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch { return d; } };
 const save = (k, v) => { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch {} };
 
-const cfg = Object.assign({ src: 'en', targets: ['ko'], engine: 'google', azKey: '', azRegion: '', pause: 1300, preview: true, wake: true, fs: 20 }, load('cfg', {}));
+const cfg = Object.assign({ stt: 'device', src: 'en', targets: ['ko'], engine: 'google', azKey: '', azRegion: '', pause: 1300, preview: true, wake: true, fs: 20 }, load('cfg', {}));
 const saveCfg = () => save('cfg', cfg);
 let lines = load('lines', []);          // {id, t, src, lang, tr:{ko:'..'|null|{err:1}}}
 let session = load('session', { memoId: null, saved: 0 }); // memo this run was saved into, and how many lines
@@ -69,7 +70,13 @@ const scrollEnd = () => { if (logEl && stick) logEl.scrollTop = logEl.scrollHeig
 
 function lineEl(it) {
   const box = el('div', 'lt-line'); box.id = 'lt-' + it.id;
-  box.append(el('div', 'lt-meta', `${hhmm(new Date(it.t))} · ${NAME[it.lang]}`), el('div', 'lt-src', it.src));
+  const meta = el('div', 'lt-meta');
+  if (it.spk && speakerName(it.spk)) {
+    const chip = btn('lt-spk s' + speakerIdx(it.spk), speakerName(it.spk), e => { e.stopPropagation(); renameSpeaker(it.spk); }, '눌러서 이름 바꾸기');
+    meta.append(chip);
+  }
+  meta.append(document.createTextNode(`${hhmm(new Date(it.t))} · ${NAME[it.lang]}`));
+  box.append(meta, el('div', 'lt-src', it.src));
   Object.entries(it.tr).forEach(([l, v]) => {
     const row = el('div', 'lt-tr' + (v === null ? ' pending' : v && v.err ? ' err' : ''));
     row.append(el('span', 'lt-tag', NAME[l]), document.createTextNode(v === null ? '번역 중…' : v && v.err ? '번역 실패 — 눌러서 다시 시도' : v));
@@ -119,7 +126,7 @@ export function renderTranslate() {
     logEl.addEventListener('scroll', () => { stick = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 80; });
   }
   paintSaveBtn();
-  if (!SR) paintStatus('이 브라우저는 음성 인식을 지원하지 않습니다. 아이폰·아이패드는 Safari, PC는 Chrome·Edge에서 열어 주세요.');
+  if (!SR && cfg.stt !== 'azure') paintStatus('이 브라우저는 음성 인식을 지원하지 않습니다. 아이폰·아이패드는 Safari, PC는 Chrome·Edge에서 열어 주세요.');
   requestAnimationFrame(() => { stick = true; scrollEnd(); });
 }
 
@@ -134,10 +141,11 @@ async function translateLine(it) {
   } catch (e) { console.warn(e); tls.forEach(l => { if (it.tr[l] == null) it.tr[l] = { err: 1 }; }); }
   paintLine(it); saveLines(); scrollEnd();
 }
-function commit(text) {
+function commit(text, spk) {
   text = text.trim();
   if (!text) return;
   const it = { id: newId('t'), t: Date.now(), src: text, lang: cfg.src, tr: {} };
+  if (spk && spk !== 'Unknown') it.spk = spk;
   targets().forEach(l => { it.tr[l] = null; });
   lines.push(it); saveLines(); paintLine(it); paintSaveBtn(); scrollEnd();
   translateLine(it);
@@ -267,7 +275,7 @@ function setMic(on) {
   b.querySelector('span').textContent = on ? '멈춤' : '듣기';
   document.body.classList.toggle('lt-listening', on);
 }
-function start() {
+function startDevice() {
   if (!SR) return;
   listening = true; everStarted = false; deniedTries = 0; restarts = 0; lastHeard = 0;
   diag = []; note(`listen ${cfg.src} ${navigator.userAgent.replace(/.*?\((.*?)\).*/, '$1').slice(0, 60)}`);
@@ -275,7 +283,7 @@ function start() {
   requestWake(); startRec();
   clearInterval(watchT); watchT = setInterval(watchdog, 3000);
 }
-function stop() {
+function stopDevice() {
   listening = false;
   clearInterval(watchT); clearTimeout(silenceT); clearTimeout(restartT); clearTimeout(previewT); previewT = null;
   const old = rec; rec = null; gen++;
@@ -284,12 +292,141 @@ function stop() {
   try { wakeLock && wakeLock.release(); } catch {}
   wakeLock = null;
 }
-const restartIfListening = () => { if (listening) { commitPending(); restart(150); } };
+function start() {
+  if (cfg.stt !== 'azure') { startDevice(); return; }
+  listening = true; everStarted = false; restarts = 0; lastHeard = 0; azRetry = 0;
+  diag = []; note('listen azure ' + cfg.src);
+  setMic(true); requestWake(); startAzure();
+}
+function stop() {
+  if (!az && cfg.stt !== 'azure') { stopDevice(); return; }
+  listening = false; azStopping = true;
+  clearTimeout(restartT); clearTimeout(previewT); previewT = null;
+  azDispose();
+  if (interim.trim()) commit(interim);
+  interim = ''; previewFor = ''; previewText = ''; setInterim('');
+  note('stop'); setMic(false); paintStatus('대기 중');
+  try { wakeLock && wakeLock.release(); } catch {}
+  wakeLock = null;
+}
+const restartIfListening = () => {
+  if (!listening) return;
+  if (cfg.stt === 'azure') { azDispose(); startAzure(); return; }
+  commitPending(); restart(150);
+};
+
+// ---------- Azure speech with speaker separation ----------
+// ConversationTranscriber labels each sentence Guest-1, Guest-2, … . The Azure key stays on the
+// server: the speech-token function hands out 10-minute tokens, refreshed every 9 minutes.
+// Usage is counted on this device so the status line can show the month's free 5 hours.
+let az = null, azTokenT = null, azUsageT = null, azRetry = 0, azStopping = false;
+let speakers = load('speakers', {});            // 'Guest-1' -> name the user typed
+const saveSpeakers = () => save('speakers', speakers);
+const monthKey = () => new Date().toISOString().slice(0, 7);
+let usage = load('usage', { m: monthKey(), sec: 0 });
+const usageHours = () => (usage.m === monthKey() ? usage.sec : 0) / 3600;
+export const speakerName = id => speakers[id] || (/^Guest-(\d+)$/.test(id || '') ? `화자 ${id.split('-')[1]}` : '');
+const speakerIdx = id => { const m = /-(\d+)$/.exec(id || ''); return m ? (+m[1] - 1) % 6 : 0; };
+
+function loadSdk() {
+  if (window.SpeechSDK) return Promise.resolve(window.SpeechSDK);
+  return new Promise((ok, bad) => {
+    const s = document.createElement('script');
+    s.src = 'vendor/speech-sdk.min.js';
+    s.onload = () => (window.SpeechSDK ? ok(window.SpeechSDK) : bad(new Error('sdk')));
+    s.onerror = () => bad(new Error('Azure 음성 모듈을 불러오지 못했습니다.'));
+    document.head.append(s);
+  });
+}
+async function speechToken() {
+  if (!CLOUD || !sb) throw new Error('Azure 화자 구분은 로그인한 상태에서만 쓸 수 있습니다.');
+  const { data, error } = await sb.functions.invoke('speech-token', { body: {} });
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return data;
+}
+function azStatus() {
+  if (!listening) return;
+  paintStatus(`${listeningText()} · 화자 구분 · 이번 달 ${usageHours().toFixed(1)}/5시간` + (lastHeard ? ` · 마지막 인식 ${clock(lastHeard)}` : '') + (restarts ? ` · 재연결 ${restarts}회` : ''));
+}
+async function startAzure() {
+  azStopping = false;
+  paintStatus('Azure 연결 중…');
+  let SDK, tok;
+  try { [SDK, tok] = await Promise.all([loadSdk(), speechToken()]); }
+  catch (e) { note('azure-setup ' + e.message); stop(); paintStatus(e.message); return; }
+  if (!listening || azStopping) return;
+  const speechConfig = SDK.SpeechConfig.fromAuthorizationToken(tok.token, tok.region);
+  speechConfig.speechRecognitionLanguage = LOCALE[cfg.src];
+  speechConfig.setProperty('SpeechServiceResponse_DiarizeIntermediateResults', 'true');
+  const audioConfig = SDK.AudioConfig.fromDefaultMicrophoneInput();
+  const t = new SDK.ConversationTranscriber(speechConfig, audioConfig);
+  const g = ++gen;
+  t.transcribing = (_, e) => {
+    if (g !== gen) return;
+    lastHeard = Date.now();
+    interim = e.result.text || '';
+    setInterim(interim, previewText); schedulePreview(); azStatus();
+  };
+  t.transcribed = (_, e) => {
+    if (g !== gen) return;
+    if (e.result.reason !== SDK.ResultReason.RecognizedSpeech || !e.result.text) return;
+    lastHeard = Date.now(); azRetry = 0;
+    interim = ''; previewFor = ''; previewText = ''; setInterim('');
+    commit(e.result.text, e.result.speakerId);
+    azStatus();
+  };
+  t.canceled = (_, e) => {
+    if (g !== gen) return;
+    const why = `${e.reason} ${e.errorCode || ''} ${e.errorDetails || ''}`.trim();
+    note('azure-canceled ' + why.slice(0, 160));
+    if (/quota|exceed|429|1007/i.test(why)) { stop(); paintStatus('이번 달 Azure 무료 사용량(5시간)을 다 쓴 것 같습니다. 설정에서 기기 내장 인식으로 바꿔 주세요.'); return; }
+    if (/permission|NotAllowed|microphone/i.test(why)) { stop(); paintStatus('마이크 권한이 없습니다. 브라우저 설정에서 마이크를 허용해 주세요.'); return; }
+    azRestart();
+  };
+  t.sessionStopped = () => { if (g === gen) { note('azure-session-stopped'); azRestart(); } };
+  az = t;
+  t.startTranscribingAsync(() => { note('azure start'); everStarted = true; azStatus(); },
+    err => { note('azure-start-fail ' + err); azRestart(); });
+  clearInterval(azTokenT);
+  azTokenT = setInterval(async () => {
+    try { const n = await speechToken(); if (az === t) t.authorizationToken = n.token; note('token refreshed'); } catch (e) { note('token-fail ' + e.message); }
+  }, 9 * 60000);
+  clearInterval(azUsageT);
+  azUsageT = setInterval(() => {
+    if (usage.m !== monthKey()) usage = { m: monthKey(), sec: 0 };
+    usage.sec += 10; save('usage', usage); azStatus();
+  }, 10000);
+}
+function azDispose() {
+  clearInterval(azTokenT); clearInterval(azUsageT);
+  const t = az; az = null; gen++;
+  if (t) { t.transcribing = t.transcribed = t.canceled = t.sessionStopped = null; try { t.stopTranscribingAsync(() => t.close(), () => t.close()); } catch {} }
+}
+function azRestart() {
+  if (!listening) return;
+  azDispose();
+  restarts++; azRetry++;
+  if (azRetry > 6) { stop(); paintStatus('Azure 연결이 계속 끊깁니다. 인터넷 연결을 확인하고 듣기를 다시 눌러 주세요.'); return; }
+  clearTimeout(restartT); restartT = setTimeout(() => { if (listening) startAzure(); }, Math.min(8000, 1000 * azRetry));
+}
+function renameSpeaker(id) {
+  const cur = speakerName(id);
+  const v = prompt(`${cur}의 이름 (비우면 기본값)`, speakers[id] || '');
+  if (v === null) return;
+  if (v.trim()) speakers[id] = v.trim().slice(0, 20); else delete speakers[id];
+  saveSpeakers();
+  lines.filter(l => l.spk === id).forEach(paintLine);
+}
 
 // ---------- save to memo ----------
 const lineText = it => {
   const tr = Object.entries(it.tr).filter(([, v]) => typeof v === 'string').map(([l, v]) => `  → ${NAME[l]} ${v}`).join('\n');
-  return `[${hhmm(new Date(it.t))}] ${NAME[it.lang]} ${it.src}` + (tr ? '\n' + tr : '');
+  const who = it.spk && speakerName(it.spk) ? `${speakerName(it.spk)}: ` : '';
+  return `[${hhmm(new Date(it.t))}] ${who}${NAME[it.lang]} ${it.src}` + (tr ? '\n' + tr : '');
 };
 function saveToMemo() {
   const fresh = lines.slice(session.saved);
@@ -318,6 +455,7 @@ function saveToMemo() {
 function clearAll() {
   if (listening) stop();
   lines = []; session = { memoId: null, saved: 0 }; saveLines(); saveSession();
+  speakers = {}; saveSpeakers();
   logEl.querySelectorAll('.lt-line:not(.interim)').forEach(n => n.remove());
   $('#tlEmpty').hidden = false; paintSaveBtn();
 }
@@ -347,6 +485,8 @@ export function wireTranslate() {
 
   // settings panel
   const f = id => $('#' + id);
+  f('tlStt').value = cfg.stt;
+  f('tlStt').addEventListener('change', () => { if (listening) stop(); cfg.stt = f('tlStt').value; saveCfg(); renderTranslate(); });
   f('tlEngine').value = cfg.engine; f('tlAzKey').value = cfg.azKey; f('tlAzRegion').value = cfg.azRegion;
   f('tlPause').value = String(cfg.pause); f('tlPreview').checked = cfg.preview; f('tlWake').checked = cfg.wake;
   f('tlAzure').hidden = cfg.engine !== 'azure';
@@ -360,6 +500,6 @@ export function wireTranslate() {
 
   document.addEventListener('visibilitychange', () => {
     if (!listening) return;
-    if (document.visibilityState === 'visible') { note('visible'); requestWake(); restart(300); } else note('hidden');
+    if (document.visibilityState === 'visible') { note('visible'); requestWake(); if (cfg.stt !== 'azure') restart(300); } else note('hidden');
   });
 }

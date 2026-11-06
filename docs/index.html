@@ -204,6 +204,7 @@
       <details class="lt-settings">
         <summary>번역 설정</summary>
         <div class="lt-grid">
+          <label>음성 인식<select id="tlStt"><option value="device">기기 내장 (무료, 화자 구분 없음)</option><option value="azure">Azure 화자 자동 구분 (월 5시간 무료)</option></select></label>
           <label>번역 엔진<select id="tlEngine"><option value="google">무료 (키 없음, Google 웹 번역)</option><option value="azure">Azure Translator 무료 키 (월 200만 자)</option></select></label>
           <label>문장 끊는 기준<select id="tlPause"><option value="900">짧게 0.9초</option><option value="1300">보통 1.3초</option><option value="2000">길게 2초</option></select></label>
           <div id="tlAzure" class="lt-azure" hidden>

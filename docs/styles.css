@@ -1021,3 +1021,7 @@ body.lt-listening [data-view="translate"] span::after { content: ""; display: in
   .lt-fs { padding: 4px 8px; flex: none; }
   .lt-log { height: calc(100dvh - 420px - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px)); }
 }
+
+.lt-spk { border: 0; border-radius: 999px; padding: 1px 9px; margin-right: 8px; font-size: .74rem; font-weight: 600; color: var(--on-tag); background: var(--tag-blue); cursor: pointer; }
+.lt-spk.s1 { background: var(--tag-orange); } .lt-spk.s2 { background: var(--tag-green); } .lt-spk.s3 { background: var(--tag-violet); }
+.lt-spk.s4 { background: var(--tag-rose); } .lt-spk.s5 { background: var(--tag-teal); }
