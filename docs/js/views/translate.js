@@ -201,7 +201,7 @@ function schedulePreview() {
 }
 function liveStatus() {
   if (!listening) return;
-  paintStatus(listeningText() + (lastHeard ? ` · 마지막 인식 ${clock(lastHeard)}` : '') + (restarts ? ` · 재연결 ${restarts}회` : ''));
+  paintStatus(listeningText() + fallbackNote + (lastHeard ? ` · 마지막 인식 ${clock(lastHeard)}` : '') + (restarts ? ` · 재연결 ${restarts}회` : ''));
 }
 function makeRec(g) {
   const r = new SR();
@@ -275,11 +275,12 @@ function setMic(on) {
   b.querySelector('span').textContent = on ? '멈춤' : '듣기';
   document.body.classList.toggle('lt-listening', on);
 }
-function startDevice() {
+function startDevice(handover = false) {
   if (!SR) return;
-  listening = true; everStarted = false; deniedTries = 0; restarts = 0; lastHeard = 0;
-  diag = []; note(`listen ${cfg.src} ${navigator.userAgent.replace(/.*?\((.*?)\).*/, '$1').slice(0, 60)}`);
-  setMic(true); paintStatus('마이크 준비 중…');
+  listening = true; everStarted = false; deniedTries = 0; lastHeard = 0;
+  if (!handover) { restarts = 0; diag = []; }
+  note(`listen ${cfg.src} ${navigator.userAgent.replace(/.*?\((.*?)\).*/, '$1').slice(0, 60)}`);
+  setMic(true); if (!handover) paintStatus('마이크 준비 중…');
   requestWake(); startRec();
   clearInterval(watchT); watchT = setInterval(watchdog, 3000);
 }
@@ -293,13 +294,15 @@ function stopDevice() {
   wakeLock = null;
 }
 function start() {
-  if (cfg.stt !== 'azure') { startDevice(); return; }
+  fallbackNote = '';
+  engine = cfg.stt === 'azure' ? 'azure' : 'device';
+  if (engine === 'device') { startDevice(); return; }
   listening = true; everStarted = false; restarts = 0; lastHeard = 0; azRetry = 0;
   diag = []; note('listen azure ' + cfg.src);
   setMic(true); requestWake(); startAzure();
 }
 function stop() {
-  if (!az && cfg.stt !== 'azure') { stopDevice(); return; }
+  if (engine !== 'azure') { stopDevice(); return; }
   listening = false; azStopping = true;
   clearTimeout(restartT); clearTimeout(previewT); previewT = null;
   azDispose();
@@ -311,20 +314,19 @@ function stop() {
 }
 const restartIfListening = () => {
   if (!listening) return;
-  if (cfg.stt === 'azure') { azDispose(); startAzure(); return; }
+  if (engine === 'azure') { azDispose(); startAzure(); return; }
   commitPending(); restart(150);
 };
 
 // ---------- Azure speech with speaker separation ----------
 // ConversationTranscriber labels each sentence Guest-1, Guest-2, … . The Azure key stays on the
 // server: the speech-token function hands out 10-minute tokens, refreshed every 9 minutes.
-// Usage is counted on this device so the status line can show the month's free 5 hours.
-let az = null, azTokenT = null, azUsageT = null, azRetry = 0, azStopping = false;
+// The server counts streaming time per month (all devices) and refuses tokens past 5 hours;
+// then, or whenever Azure can't be reached, listening carries on with the browser recognizer.
+let az = null, azTokenT = null, azUsageT = null, azRetry = 0, azStopping = false, azSince = 0;
+let engine = 'device', fallbackNote = '', usedSec = 0, limitSec = 5 * 3600;
 let speakers = load('speakers', {});            // 'Guest-1' -> name the user typed
 const saveSpeakers = () => save('speakers', speakers);
-const monthKey = () => new Date().toISOString().slice(0, 7);
-let usage = load('usage', { m: monthKey(), sec: 0 });
-const usageHours = () => (usage.m === monthKey() ? usage.sec : 0) / 3600;
 export const speakerName = id => speakers[id] || (/^Guest-(\d+)$/.test(id || '') ? `화자 ${id.split('-')[1]}` : '');
 const speakerIdx = id => { const m = /-(\d+)$/.exec(id || ''); return m ? (+m[1] - 1) % 6 : 0; };
 
@@ -338,27 +340,48 @@ function loadSdk() {
     document.head.append(s);
   });
 }
-async function speechToken() {
-  if (!CLOUD || !sb) throw new Error('Azure 화자 구분은 로그인한 상태에서만 쓸 수 있습니다.');
-  const { data, error } = await sb.functions.invoke('speech-token', { body: {} });
+async function speechApi(body) {
+  if (!CLOUD || !sb) throw new Error('Azure 화자 구분은 로그인한 상태에서만 쓸 수 있습니다');
+  const { data, error } = await sb.functions.invoke('speech-token', { body });
   if (error) {
     let msg = error.message;
     try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch {}
     throw new Error(msg);
   }
+  if (data && data.usedSec != null) { usedSec = data.usedSec; limitSec = data.limitSec || limitSec; }
   return data;
+}
+const speechToken = () => speechApi({ action: 'token' });
+// Report streaming time since the last report; true when the month's allowance is used up.
+async function reportUsage() {
+  if (!azSince) return false;
+  const now = Date.now(), sec = Math.round((now - azSince) / 1000);
+  azSince = now;
+  if (sec <= 0) return false;
+  try { return !!(await speechApi({ action: 'usage', seconds: sec })).exhausted; }
+  catch (e) { note('usage-fail ' + e.message); return false; }
+}
+function fallbackToDevice(why) {
+  note('fallback ' + why);
+  azDispose(); azStopping = true;
+  engine = 'device';
+  if (!SR) { listening = false; setMic(false); paintStatus(why + ' 이 브라우저에는 기기 내장 인식이 없어 멈췄습니다.'); return; }
+  fallbackNote = ' · 기기 인식';
+  toast(why + ' 기기 내장 인식으로 계속 듣습니다.');
+  startDevice(true);
 }
 function azStatus() {
   if (!listening) return;
-  paintStatus(`${listeningText()} · 화자 구분 · 이번 달 ${usageHours().toFixed(1)}/5시간` + (lastHeard ? ` · 마지막 인식 ${clock(lastHeard)}` : '') + (restarts ? ` · 재연결 ${restarts}회` : ''));
+  paintStatus(`${listeningText()} · 화자 구분 · 이번 달 ${(usedSec / 3600).toFixed(1)}/${(limitSec / 3600).toFixed(0)}시간` + (lastHeard ? ` · 마지막 인식 ${clock(lastHeard)}` : '') + (restarts ? ` · 재연결 ${restarts}회` : ''));
 }
 async function startAzure() {
   azStopping = false;
   paintStatus('Azure 연결 중…');
   let SDK, tok;
   try { [SDK, tok] = await Promise.all([loadSdk(), speechToken()]); }
-  catch (e) { note('azure-setup ' + e.message); stop(); paintStatus(e.message); return; }
+  catch (e) { if (listening && !azStopping) fallbackToDevice(`Azure 연결 실패(${e.message}).`); return; }
   if (!listening || azStopping) return;
+  if (tok.exhausted) { fallbackToDevice('이번 달 Azure 5시간을 다 썼습니다.'); return; }
   const speechConfig = SDK.SpeechConfig.fromAuthorizationToken(tok.token, tok.region);
   speechConfig.speechRecognitionLanguage = LOCALE[cfg.src];
   speechConfig.setProperty('SpeechServiceResponse_DiarizeIntermediateResults', 'true');
@@ -383,26 +406,33 @@ async function startAzure() {
     if (g !== gen) return;
     const why = `${e.reason} ${e.errorCode || ''} ${e.errorDetails || ''}`.trim();
     note('azure-canceled ' + why.slice(0, 160));
-    if (/quota|exceed|429|1007/i.test(why)) { stop(); paintStatus('이번 달 Azure 무료 사용량(5시간)을 다 쓴 것 같습니다. 설정에서 기기 내장 인식으로 바꿔 주세요.'); return; }
+    if (/quota|exceed|429|1007/i.test(why)) { fallbackToDevice('Azure 무료 사용량이 바닥났습니다.'); return; }
     if (/permission|NotAllowed|microphone/i.test(why)) { stop(); paintStatus('마이크 권한이 없습니다. 브라우저 설정에서 마이크를 허용해 주세요.'); return; }
     azRestart();
   };
   t.sessionStopped = () => { if (g === gen) { note('azure-session-stopped'); azRestart(); } };
   az = t;
-  t.startTranscribingAsync(() => { note('azure start'); everStarted = true; azStatus(); },
+  t.startTranscribingAsync(() => { note('azure start'); everStarted = true; azSince = Date.now(); azStatus(); },
     err => { note('azure-start-fail ' + err); azRestart(); });
   clearInterval(azTokenT);
   azTokenT = setInterval(async () => {
-    try { const n = await speechToken(); if (az === t) t.authorizationToken = n.token; note('token refreshed'); } catch (e) { note('token-fail ' + e.message); }
+    try {
+      const n = await speechToken();
+      if (az !== t) return;
+      if (n.exhausted) { fallbackToDevice('이번 달 Azure 5시간을 다 썼습니다.'); return; }
+      t.authorizationToken = n.token; note('token refreshed');
+    } catch (e) { note('token-fail ' + e.message); }
   }, 9 * 60000);
   clearInterval(azUsageT);
-  azUsageT = setInterval(() => {
-    if (usage.m !== monthKey()) usage = { m: monthKey(), sec: 0 };
-    usage.sec += 10; save('usage', usage); azStatus();
-  }, 10000);
+  azUsageT = setInterval(async () => {
+    const spent = await reportUsage();
+    if (az !== t) return;
+    if (spent) fallbackToDevice('이번 달 Azure 5시간을 다 썼습니다.'); else azStatus();
+  }, 30000);
 }
 function azDispose() {
   clearInterval(azTokenT); clearInterval(azUsageT);
+  reportUsage(); azSince = 0;
   const t = az; az = null; gen++;
   if (t) { t.transcribing = t.transcribed = t.canceled = t.sessionStopped = null; try { t.stopTranscribingAsync(() => t.close(), () => t.close()); } catch {} }
 }
@@ -410,7 +440,7 @@ function azRestart() {
   if (!listening) return;
   azDispose();
   restarts++; azRetry++;
-  if (azRetry > 6) { stop(); paintStatus('Azure 연결이 계속 끊깁니다. 인터넷 연결을 확인하고 듣기를 다시 눌러 주세요.'); return; }
+  if (azRetry > 6) { fallbackToDevice('Azure 연결이 계속 끊깁니다.'); return; }
   clearTimeout(restartT); restartT = setTimeout(() => { if (listening) startAzure(); }, Math.min(8000, 1000 * azRetry));
 }
 function renameSpeaker(id) {
@@ -500,6 +530,6 @@ export function wireTranslate() {
 
   document.addEventListener('visibilitychange', () => {
     if (!listening) return;
-    if (document.visibilityState === 'visible') { note('visible'); requestWake(); if (cfg.stt !== 'azure') restart(300); } else note('hidden');
+    if (document.visibilityState === 'visible') { note('visible'); requestWake(); if (engine !== 'azure') restart(300); } else note('hidden');
   });
 }
