@@ -2,7 +2,7 @@
 // (Safari on iPhone/iPad, Chrome/Edge on PC), translation is Google's free web endpoint with
 // MyMemory as fallback, or an Azure Translator free key. Lines stay on this device until
 // "메모로 저장" copies them into a memo, where AI 리캡 can turn them into meeting notes.
-import { $, el, btn, toast } from '../ui.js';
+import { $, el, btn, toast, copyText } from '../ui.js';
 import { md, today, hhmm, newId } from '../dates.js';
 import { normMemo, normEntry } from '../model.js';
 import { memos, entries } from '../db.js';
@@ -144,14 +144,39 @@ function commit(text) {
 }
 
 // ---------- speech recognition ----------
+// One recognizer runs for minutes at a time. A pause in speech only *commits* the text heard so
+// far (tracked by how many words/chars of this session's transcript are already on screen);
+// the recognizer is replaced only when its transcript grows long, when it ends, errors, or a
+// watchdog sees it has gone quiet. Restarting after every sentence made Safari stall mid-meeting.
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, listening = false, interim = '', silenceT, restartT, previewT = null, previewFor = '', previewText = '', wakeLock = null;
+let gen = 0, lastAlive = 0, startedAt = 0, everStarted = false, deniedTries = 0, restarts = 0, lastHeard = 0, watchT = null;
+let full = '', doneUnits = 0, doneHead = '';
+const QUIET_MS = 15000, LONG_UNITS = 350;
 
-function finalizeInterim() {
-  if (interim.trim()) commit(interim);
+// diagnostics: last 200 recognizer events, kept on this device for "진단 기록 복사"
+let diag = load('diag', []);
+const clock = t => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+function note(ev) { diag.push(`${clock(Date.now())} g${gen} ${ev}`); if (diag.length > 200) diag = diag.slice(-200); save('diag', diag); }
+export const diagText = () => diag.join('\n');
+
+const unitsOf = s => (cfg.src === 'ja' ? [...s.replace(/\s+/g, '')] : s.trim().split(/\s+/).filter(Boolean));
+const joinUnits = u => (cfg.src === 'ja' ? u.join('') : u.join(' '));
+const head = s => s.replace(/[\s.,!?、。！？]/g, '').slice(0, 12).toLowerCase();
+function pendingText() {
+  const u = unitsOf(full);
+  // The transcript restarted underneath us (or was rewritten from the top): nothing of it is on screen yet.
+  if (u.length < doneUnits || (doneHead && head(full) !== doneHead)) { doneUnits = 0; doneHead = ''; }
+  return joinUnits(u.slice(doneUnits));
+}
+function commitPending() {
+  const text = pendingText();
+  if (text.trim()) commit(text);
+  doneUnits = unitsOf(full).length; doneHead = head(full);
   interim = ''; previewFor = ''; previewText = '';
   setInterim('');
 }
+function finalizeInterim() { commitPending(); }
 function schedulePreview() {
   if (!cfg.preview || previewT || !targets().length) return;
   previewT = setTimeout(async () => {
@@ -166,11 +191,6 @@ function schedulePreview() {
     } catch {}
   }, 2000);
 }
-// Each recognizer gets a generation number; events from an older one are ignored, so a late
-// onend can never spawn a second recognizer. A watchdog replaces a recognizer that went quiet
-// (Safari sometimes stops without firing onend, or never fires onstart after a restart).
-let gen = 0, lastAlive = 0, startedAt = 0, everStarted = false, deniedTries = 0, restarts = 0, lastHeard = 0, watchT = null;
-const clock = t => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 function liveStatus() {
   if (!listening) return;
   paintStatus(listeningText() + (lastHeard ? ` · 마지막 인식 ${clock(lastHeard)}` : '') + (restarts ? ` · 재연결 ${restarts}회` : ''));
@@ -179,38 +199,40 @@ function makeRec(g) {
   const r = new SR();
   r.lang = LOCALE[cfg.src]; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
   const alive = () => { if (g === gen) lastAlive = Date.now(); };
-  r.onstart = () => { if (g !== gen) return; alive(); everStarted = true; deniedTries = 0; liveStatus(); };
+  r.onstart = () => { if (g !== gen) return; alive(); everStarted = true; deniedTries = 0; note('start'); liveStatus(); };
   r.onaudiostart = r.onsoundstart = r.onspeechstart = alive;
   r.onresult = e => {
     if (g !== gen) return;
     alive(); lastHeard = Date.now();
-    let finals = '', live = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) finals += t; else live += t;
-    }
-    if (finals.trim()) { commit(finals); previewFor = ''; previewText = ''; }
-    interim = live;
+    let all = '', allFinal = true;
+    for (let i = 0; i < e.results.length; i++) { all += e.results[i][0].transcript; if (!e.results[i].isFinal) allFinal = false; }
+    full = all;
+    interim = pendingText();
     setInterim(interim, previewText);
     liveStatus();
     clearTimeout(silenceT);
-    if (interim.trim()) {
-      schedulePreview();
-      // iPhone Safari rarely marks results final mid-stream: a pause closes the sentence instead.
-      silenceT = setTimeout(() => { if (listening && g === gen) { finalizeInterim(); restart(150); } }, cfg.pause);
-    }
+    if (!interim.trim()) return;
+    if (allFinal) { commitPending(); return; }          // Chrome/Edge mark sentences final themselves
+    schedulePreview();
+    // Safari rarely marks results final mid-stream: a pause closes the sentence instead.
+    silenceT = setTimeout(() => {
+      if (!listening || g !== gen) return;
+      commitPending();
+      if (unitsOf(full).length > LONG_UNITS) { note('rotate'); restart(150); }
+    }, cfg.pause);
   };
   r.onerror = e => {
     if (g !== gen) return;
+    note('error ' + e.error);
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       // Mid-meeting Safari sometimes reports this on an automatic restart; retry a few times first.
-      if (everStarted && deniedTries < 3) { deniedTries++; restart(1000); return; }
+      if (everStarted && deniedTries < 3) { deniedTries++; restarts++; restart(1500); return; }
       stop(); paintStatus('마이크·음성 인식이 막혔습니다. 듣기를 다시 눌러 주세요. 계속되면 브라우저 권한과 아이폰 설정 › Siri › 받아쓰기를 확인하세요.');
     } else if (e.error === 'language-not-supported') { stop(); paintStatus('이 기기에서 해당 언어 인식을 지원하지 않습니다.'); }
     else if (e.error === 'no-speech' || e.error === 'aborted') { /* onend restarts */ }
-    else { console.warn("speech", e.error); restarts++; restart(800); }
+    else { restarts++; restart(1000); }
   };
-  r.onend = () => { if (g !== gen) return; if (interim.trim()) finalizeInterim(); if (listening) restart(150); };
+  r.onend = () => { if (g !== gen) return; note('end'); commitPending(); if (listening) restart(250); };
   return r;
 }
 function restart(delay = 150) {
@@ -222,17 +244,17 @@ function restart(delay = 150) {
 function startRec() {
   if (!listening || rec) return;
   const g = ++gen;
-  startedAt = Date.now(); lastAlive = 0;
+  startedAt = Date.now(); lastAlive = 0; full = ''; doneUnits = 0; doneHead = '';
   try { rec = makeRec(g); rec.start(); }
-  catch (e) { console.warn(e); rec = null; restartT = setTimeout(startRec, 600); }
+  catch (e) { note('start-throw ' + (e && e.name)); rec = null; restartT = setTimeout(startRec, 800); }
 }
 function watchdog() {
   if (!listening || document.visibilityState !== 'visible') return;
   const now = Date.now();
   if (!rec) { if (now - startedAt > 3000) startRec(); return; }
-  const neverStarted = !lastAlive && now - startedAt > 5000;   // start() swallowed silently
-  const quiet = lastAlive && now - lastAlive > 10000;           // no audio events at all for 10s
-  if (neverStarted || quiet) { if (interim.trim()) finalizeInterim(); restarts++; restart(100); }
+  const neverStarted = !lastAlive && now - startedAt > 6000;   // start() swallowed silently
+  const quiet = lastAlive && now - lastAlive > QUIET_MS;        // no audio events at all for a while
+  if (neverStarted || quiet) { note(neverStarted ? 'watchdog no-start' : 'watchdog quiet'); commitPending(); restarts++; restart(100); }
 }
 async function requestWake() {
   if (!cfg.wake || !('wakeLock' in navigator)) return;
@@ -248,6 +270,7 @@ function setMic(on) {
 function start() {
   if (!SR) return;
   listening = true; everStarted = false; deniedTries = 0; restarts = 0; lastHeard = 0;
+  diag = []; note(`listen ${cfg.src} ${navigator.userAgent.replace(/.*?\((.*?)\).*/, '$1').slice(0, 60)}`);
   setMic(true); paintStatus('마이크 준비 중…');
   requestWake(); startRec();
   clearInterval(watchT); watchT = setInterval(watchdog, 3000);
@@ -257,11 +280,11 @@ function stop() {
   clearInterval(watchT); clearTimeout(silenceT); clearTimeout(restartT); clearTimeout(previewT); previewT = null;
   const old = rec; rec = null; gen++;
   if (old) { old.onstart = old.onresult = old.onerror = old.onend = null; try { old.stop(); } catch {} }
-  finalizeInterim(); setMic(false); paintStatus('대기 중');
+  commitPending(); note('stop'); setMic(false); paintStatus('대기 중');
   try { wakeLock && wakeLock.release(); } catch {}
   wakeLock = null;
 }
-const restartIfListening = () => { if (listening) restart(150); };
+const restartIfListening = () => { if (listening) { commitPending(); restart(150); } };
 
 // ---------- save to memo ----------
 const lineText = it => {
@@ -332,9 +355,11 @@ export function wireTranslate() {
     cfg.pause = +f('tlPause').value; cfg.preview = f('tlPreview').checked; cfg.wake = f('tlWake').checked;
     f('tlAzure').hidden = cfg.engine !== 'azure'; saveCfg();
   };
+  $('#tlDiag').addEventListener('click', e => { copyText(diagText() || '기록 없음', e.currentTarget); });
   ['tlEngine', 'tlPause', 'tlPreview', 'tlWake', 'tlAzKey', 'tlAzRegion'].forEach(id => f(id).addEventListener('change', readSettings));
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && listening) { requestWake(); if (!rec) startRec(); }
+    if (!listening) return;
+    if (document.visibilityState === 'visible') { note('visible'); requestWake(); restart(300); } else note('hidden');
   });
 }
