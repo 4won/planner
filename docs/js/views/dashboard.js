@@ -159,7 +159,7 @@ function openWeather() {
 function ring(done, total) {
   const pct = total ? done / total : 0;
   const s = el('div', 'ring');
-  s.innerHTML = `<svg viewBox="0 0 42 42"><circle class="ring-bg" cx="21" cy="21" r="17"/><circle class="ring-fg" cx="21" cy="21" r="17" stroke-dasharray="${(pct * 106.8).toFixed(1)} 106.8"/></svg>`;
+  s.innerHTML = `<svg viewBox="0 0 42 42"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--br-a)"/><stop offset=".55" style="stop-color:var(--br-b)"/><stop offset="1" style="stop-color:var(--br-c)"/></linearGradient></defs><circle class="ring-bg" cx="21" cy="21" r="17"/><circle class="ring-fg" cx="21" cy="21" r="17" stroke-dasharray="${(pct * 106.8).toFixed(1)} 106.8"/></svg>`;
   s.append(el('b', null, total ? `${Math.round(pct * 100)}%` : '–'));
   return s;
 }

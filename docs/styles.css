@@ -1025,3 +1025,113 @@ body.lt-listening [data-view="translate"] span::after { content: ""; display: in
 .lt-spk { border: 0; border-radius: 999px; padding: 1px 9px; margin-right: 8px; font-size: .74rem; font-weight: 600; color: var(--on-tag); background: var(--tag-blue); cursor: pointer; }
 .lt-spk.s1 { background: var(--tag-orange); } .lt-spk.s2 { background: var(--tag-green); } .lt-spk.s3 { background: var(--tag-violet); }
 .lt-spk.s4 { background: var(--tag-rose); } .lt-spk.s5 { background: var(--tag-teal); }
+
+/* Top-right icons: bare bold outline glyphs (no box), plus in a rounded square, chunky gear */
+.mtop .iconbtn,
+.side-foot .iconbtn.js-settings { width: 40px; height: 40px; border: 0; border-radius: 12px; background: transparent; }
+.mtop .js-add.iconbtn { background: transparent; border: 0; }
+.mtop .iconbtn svg,
+.side-foot .iconbtn.js-settings svg { width: 26px; height: 26px; stroke: var(--ink); stroke-width: 2.1; fill: none; }
+.mtop .js-add.iconbtn svg { stroke: var(--ink); stroke-width: 2.1; }
+.side-foot .iconbtn.js-settings svg { width: 22px; height: 22px; }
+.mtop .iconbtn:hover,
+.side-foot .iconbtn.js-settings:hover { background: var(--hover, rgba(127,127,127,.12)); }
+.mtop .iconbtn:active svg { transform: scale(.92); }
+.mtop .iconbtn svg { transition: transform .12s ease-out; }
+@media (prefers-reduced-motion: reduce) { .mtop .iconbtn svg { transition: none; } }
+/* Icons taken from the user's reference image, used as masks so they follow the ink color in both themes */
+.ic-img { display: block; width: 26px; height: 26px; background: var(--ink); -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; transition: transform .12s ease-out; }
+.ic-plus { --ic: url(icons/ic-plus.png); }
+.ic-gear { --ic: url(icons/ic-gear.png); }
+.side-foot .ic-img { width: 22px; height: 22px; }
+.mtop .iconbtn:active .ic-img { transform: scale(.92); }
+@media (prefers-reduced-motion: reduce) { .ic-img { transition: none; } }
+
+/* ---------- brand gradient (violet-blue → blue → aqua), replaces the old navy accent ---------- */
+:root {
+  --br-a: #6462f4; --br-b: #4c84ec; --br-c: #4cc6ef;
+  --brand: linear-gradient(135deg, var(--br-a) 0%, var(--br-b) 55%, var(--br-c) 100%);
+  --accent: #5a5cf0; --accent-ink: #ffffff; --soft: #eef0fe;
+  --glow-a: #5fd2f2; --glow-b: #6c6af5;
+  --st-doing: #6462f4; --st-doing2: #4cc6ef;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --br-a: #8b89ff; --br-b: #6ea2ff; --br-c: #78e0fb;
+    --accent: #9d9fff; --accent-ink: #0c0e22; --soft: #22244a;
+    --glow-a: #78e0fb; --glow-b: #8b89ff;
+    --st-doing: #8b89ff; --st-doing2: #78e0fb;
+  }
+}
+/* filled accent surfaces take the gradient */
+.btn.primary, .chip.primary, .send-btn:not(:disabled), .lt-mic,
+.check[aria-pressed="true"], .fchip input:checked,
+.day.is-today .day-label, .tl-day.today span, .mday.today + .mnum, .wc-day.today .wc-num,
+.mrow.drop-before::before, .mrow.drop-after::after {
+  background: var(--brand) border-box; border-color: transparent; color: var(--accent-ink);
+}
+.btn.primary:hover, .chip.primary:hover, .send-btn:not(:disabled):hover { filter: brightness(1.06) saturate(1.05); }
+.btn.primary { box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--br-a) 70%, transparent); }
+.vtabs button[aria-selected="true"] { box-shadow: none; background-image: var(--brand); background-size: 100% 2px; background-repeat: no-repeat; background-position: bottom; }
+.ring-fg { stroke: url(#ringGrad); }
+.side-nav button[aria-current="true"], .side-proj.on, .bottom-nav button[aria-current="true"], .seg button[aria-selected="true"] { color: var(--accent); }
+
+/* ---------- liquid glass: faint brand light behind everything, translucent cards, floating tab bar ---------- */
+:root {
+  --glass: rgba(255,255,255,.28); --glass-in: rgba(255,255,255,.2);
+  --glass-rim: rgba(255,255,255,.75); --glass-hi: rgba(255,255,255,.45);
+  --glass-shadow: 0 14px 34px -16px rgba(58,64,170,.32);
+  --glass-blur: blur(22px) saturate(1.7);
+  --bg-light: radial-gradient(60vmax 60vmax at 92% 6%, rgba(100,98,244,.2), transparent 72%),
+              radial-gradient(64vmax 64vmax at 4% 45%, rgba(76,198,239,.18), transparent 72%),
+              radial-gradient(60vmax 60vmax at 90% 80%, rgba(76,132,236,.15), transparent 72%),
+              radial-gradient(50vmax 50vmax at 18% 100%, rgba(160,120,250,.12), transparent 72%);
+  --bg: #eef0f8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --glass: rgba(30,36,60,.42); --glass-in: rgba(40,46,74,.32);
+    --glass-rim: rgba(255,255,255,.12); --glass-hi: rgba(255,255,255,.08);
+    --glass-shadow: 0 14px 34px -16px rgba(0,0,0,.6);
+    --bg-light: radial-gradient(60vmax 60vmax at 92% 6%, rgba(100,98,244,.22), transparent 72%),
+                radial-gradient(64vmax 64vmax at 4% 45%, rgba(76,198,239,.14), transparent 72%),
+                radial-gradient(60vmax 60vmax at 90% 80%, rgba(76,132,236,.14), transparent 72%),
+                radial-gradient(50vmax 50vmax at 18% 100%, rgba(160,120,250,.12), transparent 72%);
+    --bg: #0e1120;
+  }
+}
+body { background: var(--bg-light), var(--bg); background-attachment: fixed; }
+
+.widget, .kpi, .pcard, .memo-pane, .bottom-nav, .mtop .iconbtn {
+  background-color: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-rim);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+}
+.widget, .kpi, .memo-pane { position: relative; border-radius: 22px; }
+.widget::before, .kpi::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(160deg, var(--glass-hi) 0%, transparent 38%);
+}
+.widget > *, .kpi > * { position: relative; }
+.pcard { border-radius: 22px; }
+.mtop .iconbtn { border-radius: 50%; width: 44px; height: 44px; }
+@media (min-width: 900px) {
+  .side { background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border-right: 1px solid var(--glass-rim); }
+}
+@media (max-width: 899px) {
+  .mainarea { padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px)); }
+  .bottom-nav {
+    left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    border-radius: 28px; padding: 6px; gap: 2px;
+  }
+  .bottom-nav button { border-radius: 22px; padding: 7px 0; }
+  .bottom-nav button[aria-current="true"] { background: var(--brand); color: var(--accent-ink); box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 6px 16px -8px color-mix(in srgb, var(--br-a) 70%, transparent); }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .widget, .kpi, .pcard, .memo-pane, .bottom-nav, .mtop .iconbtn, .side { background-color: var(--surface); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .widget, .kpi, .pcard, .memo-pane, .bottom-nav, .mtop .iconbtn, .side { background-color: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
