@@ -1,6 +1,6 @@
 {
-  "name": "주간 체크 플래너",
-  "short_name": "체크 플래너",
+  "name": "4WON'S PLANNER",
+  "short_name": "4WON'S PLANNER",
   "description": "마감일과 리마인드 시작 시점을 정하면 완료할 때까지 매주 체크리스트에 다시 올라오는 투두·캘린더 플래너",
   "lang": "ko",
   "start_url": "./#week",
