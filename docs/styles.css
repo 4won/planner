@@ -681,9 +681,10 @@ dialog:has(.wxd) { width: min(780px, calc(100vw - 32px)); }
 /* ---------- sheet close button ---------- */
 dialog { position: fixed; }
 .sheet-x { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border-radius: 50%; border: 0; background: transparent; display: grid; place-items: center; z-index: 2; color: var(--muted); }
-.sheet-x:hover { background: var(--soft); color: var(--ink); }
+@media (hover: hover) { .sheet-x:hover { color: var(--ink); } }
 .sheet-x svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.sheet-x:focus:not(:focus-visible) { outline: none; }
+.sheet-x:focus { outline: none; }
+.sheet-x:focus-visible { color: var(--accent); }
 .ed > h2, .wxd > h2 { padding-right: 40px; }
 
 /* ---------- status sections, hashtags, board cards ---------- */
@@ -1001,7 +1002,6 @@ body.lt-listening [data-view="translate"] span::after { content: ""; display: in
 .side-foot .iconbtn.js-settings svg { width: 26px; height: 26px; stroke: var(--ink); stroke-width: 2.1; fill: none; }
 .mtop .js-add.iconbtn svg { stroke: var(--ink); stroke-width: 2.1; }
 .side-foot .iconbtn.js-settings svg { width: 22px; height: 22px; }
-.mtop .iconbtn:hover,
 .side-foot .iconbtn.js-settings:hover { background: var(--hover, rgba(127,127,127,.12)); }
 .mtop .iconbtn:active svg { transform: scale(.92); }
 .mtop .iconbtn svg { transition: transform .12s ease-out; }
@@ -1049,7 +1049,7 @@ body.lt-listening [data-view="translate"] span::after { content: ""; display: in
 }
 body { background: var(--bg-light), var(--bg); background-attachment: fixed; }
 
-.widget, .kpi, .pcard, .memo-pane, .bottom-nav, .mtop .iconbtn {
+.widget, .kpi, .pcard, .memo-pane, .bottom-nav {
   background-color: var(--glass);
   -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-rim);
@@ -1062,7 +1062,7 @@ body { background: var(--bg-light), var(--bg); background-attachment: fixed; }
 }
 .widget > *, .kpi > * { position: relative; }
 .pcard { border-radius: 22px; }
-.mtop .iconbtn { border-radius: 50%; width: 44px; height: 44px; }
+.mtop .iconbtn { width: 44px; height: 44px; background: transparent; border: 0; box-shadow: none; }
 @media (min-width: 900px) {
   .side { background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border-right: 1px solid var(--glass-rim); }
 }
@@ -1077,8 +1077,8 @@ body { background: var(--bg-light), var(--bg); background-attachment: fixed; }
   .bottom-nav button[aria-current="true"] { background: var(--brand); color: var(--accent-ink); box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 6px 16px -8px color-mix(in srgb, var(--br-a) 70%, transparent); }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .widget, .kpi, .pcard, .memo-pane, .bottom-nav, .mtop .iconbtn, .side { background-color: var(--surface); }
+  .widget, .kpi, .pcard, .memo-pane, .bottom-nav, .side { background-color: var(--surface); }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .widget, .kpi, .pcard, .memo-pane, .bottom-nav, .mtop .iconbtn, .side { background-color: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .widget, .kpi, .pcard, .memo-pane, .bottom-nav, .side { background-color: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
