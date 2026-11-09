@@ -1082,3 +1082,9 @@ body { background: var(--bg-light), var(--bg); background-attachment: fixed; }
 @media (prefers-reduced-transparency: reduce) {
   .widget, .kpi, .pcard, .memo-pane, .bottom-nav, .side { background-color: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* memo header: keep the delete button in place when it arms */
+.memo-head { flex-wrap: nowrap; }
+.memo-head .memo-title { flex: 1 1 0; }
+.memo-head select { flex: 0 1 auto; min-width: 0; }
+.memo-head #memoDelete { flex: none; white-space: nowrap; }
