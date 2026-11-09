@@ -1088,3 +1088,9 @@ body { background: var(--bg-light), var(--bg); background-attachment: fixed; }
 .memo-head .memo-title { flex: 1 1 0; }
 .memo-head select { flex: 0 1 auto; min-width: 0; }
 .memo-head #memoDelete { flex: none; white-space: nowrap; }
+
+/* board: long hashtags must not widen the column */
+.col { grid-template-columns: minmax(0, 1fr); }
+.card { min-width: 0; }
+.card .row-meta > * { min-width: 0; max-width: 100%; }
+.card .tag { overflow: hidden; text-overflow: ellipsis; }
