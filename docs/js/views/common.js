@@ -29,7 +29,19 @@ export function taskRow(it, W, { showProject = true } = {}) {
   cb.type = 'button'; cb.innerHTML = CHECK_SVG;
   cb.setAttribute('aria-pressed', String(checked));
   cb.setAttribute('aria-label', it.repeat && !it.done ? `${it.title} 이번 주 확인` : `${it.title} 완료`);
-  cb.addEventListener('click', () => toggleCheck(it.id, W || weekStart(today())));
+  // Checking plays a short "done" moment before the list updates; a second tap in that time cancels it.
+  let pending = null;
+  cb.addEventListener('click', () => {
+    const wk = W || weekStart(today());
+    if (pending) { clearTimeout(pending); pending = null; r.classList.remove('completing', 'leaving'); cb.setAttribute('aria-pressed', 'false'); return; }
+    if (checked) { toggleCheck(it.id, wk); return; }
+    cb.setAttribute('aria-pressed', 'true');
+    r.classList.add('completing');
+    pending = setTimeout(() => {
+      r.classList.add('leaving');
+      pending = setTimeout(() => { pending = null; toggleCheck(it.id, wk); }, 260);
+    }, 900);
+  });
   r.append(cb);
 
   const main = el('div', 'row-main');

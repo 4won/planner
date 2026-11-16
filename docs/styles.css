@@ -1102,3 +1102,18 @@ body { background: var(--bg-light), var(--bg); background-attachment: fixed; }
 .auth-card > p { line-height: 1.6; }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .auth-card { background-color: var(--surface); } }
 @media (prefers-reduced-transparency: reduce) { .auth-card { background-color: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+
+/* check: short "done" moment before the row leaves */
+.check svg path { stroke-dasharray: 16; stroke-dashoffset: 0; }
+.row.completing .check { animation: check-pop .32s cubic-bezier(.3,1.5,.5,1); }
+.row.completing .check svg path { animation: check-draw .28s ease-out .05s both; }
+.row .row-title span.t { background: linear-gradient(currentColor, currentColor) left 55% / 0 1.5px no-repeat; transition: background-size .3s ease-out .12s, color .3s; }
+.row.completing .row-title span.t { background-size: 100% 1.5px; color: var(--muted); }
+.row.completing { transition: opacity .26s ease-in, transform .26s ease-in; }
+.row.leaving { opacity: 0; transform: translateX(14px); }
+@keyframes check-pop { 0% { transform: scale(1); } 40% { transform: scale(1.22); } 100% { transform: scale(1); } }
+@keyframes check-draw { from { stroke-dashoffset: 16; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .row.completing .check, .row.completing .check svg path { animation: none; }
+  .row.leaving { transform: none; }
+}
