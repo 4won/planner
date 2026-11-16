@@ -1105,7 +1105,7 @@ body { background: var(--bg-light), var(--bg); background-attachment: fixed; }
 
 /* check: short "done" moment before the row leaves */
 .check svg path { stroke-dasharray: 16; stroke-dashoffset: 0; }
-.row.completing .check { animation: check-pop .32s cubic-bezier(.3,1.5,.5,1); }
+.row.completing .check { animation: check-pop .32s cubic-bezier(.22,1,.36,1); }
 .row.completing .check svg path { animation: check-draw .28s ease-out .05s both; }
 .row .row-title span.t { background: linear-gradient(currentColor, currentColor) left 55% / 0 1.5px no-repeat; transition: background-size .3s ease-out .12s, color .3s; }
 .row.completing .row-title span.t { background-size: 100% 1.5px; color: var(--muted); }
